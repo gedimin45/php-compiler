@@ -26,8 +26,9 @@ function run(string $filename, string $code, array $options): void
             } else {
                 $debugFile = $options['-y'];
             }
+            $runtime->setDebug($debugFile);
         }
-        $runtime->standalone($block, $options['-o'], $debugFile);
+        $runtime->standalone($block, $options['-o']);
     }
 }
 

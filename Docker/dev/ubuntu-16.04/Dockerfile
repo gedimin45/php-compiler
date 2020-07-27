@@ -7,14 +7,20 @@ RUN mkdir compiler && \
 RUN curl -sL https://deb.nodesource.com/setup_10.x | bash - && \
     apt-get -y install nodejs
 
-RUN curl -L https://github.com/php/php-src/archive/PHP-7.4.zip -o PHP-7.4.zip && unzip PHP-7.4.zip && mv php-src-PHP-7.4 php
+#RUN curl -L https://github.com/php/php-src/archive/PHP-7.4.zip -o PHP-7.4.zip && unzip PHP-7.4.zip && mv php-src-PHP-7.4 php
+RUN curl -L https://www.php.net/distributions/php-7.4.7.tar.gz -o PHP-7.4.tar.gz && tar xf PHP-7.4.tar.gz && mv php-7.4.7 php
 
 WORKDIR php
 
 RUN ./buildconf && \
-    ./configure --disable-cgi --with-ffi --with-openssl --enable-mbstring --with-pcre-jit --with-zlib --enable-bcmath --with-curl --with-gd --enable-pcntl --enable-zip && \
+    ./configure --disable-cgi --with-ffi --with-openssl --enable-mbstring --with-pcre-jit --with-zlib --enable-bcmath --with-curl --enable-pcntl && \
     make -j16 && \
     make install
+
+WORKDIR /
+RUN curl -L https://xdebug.org/files/xdebug-2.9.6.tgz -o xdebug.tar.gz && tar xf xdebug.tar.gz && mv xdebug-2.9.6 xdebug
+WORKDIR ../xdebug
+RUN phpize && ./configure --enable-xdebug && make && make install
 
 WORKDIR ../php-ast
 RUN git clone https://github.com/nikic/php-ast . && \

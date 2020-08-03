@@ -15,6 +15,9 @@ use PHPCfg\Traverser;
 use PHPCfg\LivenessDetector;
 use PHPCfg\Visitor;
 use PHPCfg\Script;
+use PHPCompiler\Cgen\FunctionCall;
+use PHPCompiler\Cgen\VariableDefinition;
+use PHPCompiler\Cgen\VariableReference;
 use PHPTypes\TypeReconstructor;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor;
@@ -49,7 +52,7 @@ class Runtime {
             new NodeVisitor\NameResolver
         );
         $this->parser = new Parser(
-            (new ParserFactory)->create(ParserFactory::ONLY_PHP7), 
+            (new ParserFactory)->create(ParserFactory::ONLY_PHP7),
             $astTraverser
         );
 
@@ -150,9 +153,54 @@ class Runtime {
     }
 
     public function standalone(?Block $block, string $outfile) {
-        $context = $this->loadJitContext();
-        $context->setMain($this->loadJit()->compile($block));
-        $context->compileToFile($outfile);
+        $stmts = $this->loadJit()->compile($block);
+
+        $output = '';
+
+        foreach ($stmts as $stmt) {
+            if ($stmt instanceof VariableDefinition) {
+                $type = $stmt->type();
+                if ($type === 'string') {
+                    $output .= <<<C
+char {$stmt->name()}[] = "{$stmt->value()}";
+C . "\n";
+                }
+
+                if ($type === 'integer') {
+                    $output .= <<<C
+int {$stmt->name()} = {$stmt->value()};
+C . "\n";
+                }
+            }
+
+            if ($stmt instanceof FunctionCall) {
+                $argList = [];
+                foreach ($stmt->args() as $arg) {
+                    if ($arg instanceof VariableReference) {
+                        $argList[] = $arg->name();
+                    } else {
+                        if (is_string($arg)) {
+                            $arg = '"' . $arg . '"';
+                        }
+                        $argList[] = $arg;
+                    }
+                }
+                $argList = implode(', ', $argList);
+                $output .= "{$stmt->name()}({$argList});\n";
+            }
+        }
+
+        $output = <<<C
+#include <stdio.h>
+
+int main () {
+{$output}
+return 0;
+}
+
+C;
+
+        echo $output;
     }
 
     public function parseAndCompile(string $code, string $filename): ?Block {

@@ -14,6 +14,8 @@ namespace PHPCompiler;
 
 use PHPCfg\Op;
 use PHPCfg\Operand;
+use PHPCompiler\Cgen\FunctionCall;
+use PHPCompiler\Cgen\VariableReference;
 use PHPCompiler\Func as CoreFunc;
 use PHPCompiler\JIT\Context;
 use PHPCompiler\JIT\Variable;
@@ -36,17 +38,20 @@ class JIT
     private array $queue = [];
 
     public Context $context;
+    private array $variableDefs = [];
+    private array $functionCalls = [];
 
     public function __construct(Context $context)
     {
         $this->context = $context;
     }
 
-    public function compile(Block $block): PHPLLVM\Value
+    public function compile(Block $block)
     {
         $return = $this->compileBlock($block);
         $this->runQueue();
-        return $return;
+
+        return array_merge($this->variableDefs, $this->functionCalls);
     }
 
     public function compileFunc(CoreFunc $func): void
@@ -163,11 +168,10 @@ class JIT
         PHPLLVM\Value $func,
         Block $block,
         Variable ...$args
-    ): PHPLLVM\BasicBlock
-    {
-        if ($this->context->scope->blockStorage->contains($block)) {
-            return $this->context->scope->blockStorage[$block];
-        }
+    ) {
+//        if ($this->context->scope->blockStorage->contains($block)) {
+//            return $this->context->scope->blockStorage[$block];
+//        }
         self::$blockNumber++;
         $origBasicBlock = $basicBlock = $func->appendBasicBlock('block_' . self::$blockNumber);
         $this->context->scope->blockStorage[$block] = $basicBlock;
@@ -175,334 +179,42 @@ class JIT
         $builder->positionAtEnd($basicBlock);
         // Handle hoisted variables
         foreach ($block->orig->hoistedOperands as $operand) {
-            $this->context->makeVariableFromOp($func, $basicBlock, $block, $operand);
+//            $this->context->makeVariableFromOp($func, $basicBlock, $block, $operand);
         }
 
         for ($i = 0, $length = count($block->opCodes); $i < $length; $i++) {
             $op = $block->opCodes[$i];
             switch ($op->type) {
-                case OpCode::TYPE_ARG_RECV:
-                    $this->assignOperand($block->getOperand($op->arg1), $args[$op->arg2]);
-                    break;
                 case OpCode::TYPE_ASSIGN:
-                    $value = $this->context->getVariableFromOp($block->getOperand($op->arg3));
-                    $this->assignOperand($block->getOperand($op->arg2), $value);
-                    $this->assignOperand($block->getOperand($op->arg1), $value);
-                    break;
-                // case OpCode::TYPE_ARRAY_DIM_FETCH:
-                //     $value = $this->context->getVariableFromOp($block->getOperand($op->arg2));
-                //     $dimOp = $block->getOperand($op->arg3);
-                //     $dim = $this->context->getVariableFromOp($dimOp);
-                //     if ($value->type & Variable::IS_NATIVE_ARRAY && $this->context->analyzer->needsBoundsCheck($value, $dimOp)) {
-                //         // compile bounds check
-                //         $builder->call(
-                //             $this->context->lookupFunction('__nativearray__boundscheck'),
-                //             $dim->value,
-                //             $this->context->constantFromInteger($value->nextFreeElement)
-                //         );
-                //     }
-                //     $this->assignOperand(
-                //         $block->getOperand($op->arg1),
-                //         $value->dimFetch($dim)
-                //     );
-                //     break;
-                // case OpCode::TYPE_INIT_ARRAY:
-                // case OpCode::TYPE_ADD_ARRAY_ELEMENT:
-                //     $result = $this->context->getVariableFromOp($block->getOperand($op->arg1));
-                //     if ($result->type & Variable::IS_NATIVE_ARRAY) {
-                //         if (is_null($op->arg3)) {
-                //             $idx = $result->nextFreeElement;
-                //         } else {
-                //             // this is safe, since we only compile to native array if it's checked to be good
-                //             $idx = $block->getOperand($op->arg3)->value;
-                //         }
-                //         $this->context->helper->assign(
-                //             $gccBlock,
-                //             \gcc_jit_context_new_array_access(
-                //                 $this->context->context,
-                //                 $this->context->location(),
-                //                 $result->rvalue,
-                //                 $this->context->constantFromInteger($idx, 'size_t')
-                //             ),
-                //             $this->context->getVariableFromOp($block->getOperand($op->arg2))->rvalue
-                //         );
-                //         $result->nextFreeElement = max($result->nextFreeElement, $idx + 1);
-                //     } else {
-                //         throw new \LogicException('Hash tables not implemented yet');
-                //     }
-                //     break;
-                case OpCode::TYPE_BOOLEAN_NOT:
-                    $from = $this->context->getVariableFromOp($block->getOperand($op->arg2));
-                    if ($from->type === Variable::TYPE_NATIVE_BOOL) {
-                        $value = $this->context->helper->loadValue($from);
-                    } else {
-                        $value = $this->context->castToBool($this->context->helper->loadValue($from));
-                    }
-                    $__right = $value->typeOf()->constInt(1, false);
+                    $value = $block->getOperand($op->arg3)->value;
 
+                    $orignal = $block->getOperand($op->arg2);
+                    $depth = 0;
+                    while (!($orignal instanceof Operand\Variable) && $depth < 10) {
+                        $orignal = $orignal->original;
+                        $depth++;
+                    }
 
-                    $result = $this->context->builder->bitwiseXor($value, $__right);
+                    $varName = $orignal->name->value;
+                    $this->variableDefs[$op->arg2] = new \PHPCompiler\Cgen\VariableDefinition(
+                        gettype($value),
+                        $varName,
+                        $value
+                    );
+                    break;
 
-
-                    $this->assignOperandValue($block->getOperand($op->arg1), $result);
-                    break;
-                case OpCode::TYPE_CONCAT:
-                    if (!$this->context->hasVariableOp($block->getOperand($op->arg1))) {
-                        // don't bother with constant operations
-                        break;
-                    }
-                    $result = $this->context->getVariableFromOp($block->getOperand($op->arg1));
-                    $left = $this->context->getVariableFromOp($block->getOperand($op->arg2));
-                    $right = $this->context->getVariableFromOp($block->getOperand($op->arg3));
-                    $this->context->type->string->concat($result, $left, $right);
-                    break;
-                case OpCode::TYPE_CONST_FETCH:
-                    $value = null;
-                    if (!is_null($op->arg3)) {
-                        // try NS constant fetch
-                        $value = $this->context->constantFetch($block->getOperand($op->arg3));
-                    }
-                    if (is_null($value)) {
-                        $value = $this->context->constantFetch($block->getOperand($op->arg2));
-                    }
-                    if (is_null($value)) {
-                        throw new \RuntimeException('Unknown constant fetch');
-                    }
-                    $this->assignOperand($block->getOperand($op->arg1), $value);
-                    break;
-                case OpCode::TYPE_CAST_BOOL:
-                    $value = $this->context->getVariableFromOp($block->getOperand($op->arg2));
-                    $this->assignOperand($block->getOperand($op->arg1), $value->castTo(Variable::TYPE_NATIVE_BOOL));
-                    break;
                 case OpCode::TYPE_ECHO:
                 case OpCode::TYPE_PRINT:
-                    $argOffset = $op->type === OpCode::TYPE_ECHO ? $op->arg1 : $op->arg2;
-                    $arg = $this->context->getVariableFromOp($block->getOperand($argOffset));
-                    $argValue = $this->context->helper->loadValue($arg);
-                    switch ($arg->type) {
-                        case Variable::TYPE_VALUE:
-                            $argValue = $this->context->builder->call(
-                                $this->context->lookupFunction('__value__readString'),
-                                $argValue
-
-                            );
-
-                        // Fall through intentional
-                        case Variable::TYPE_STRING:
-                            $fmt = $this->context->builder->pointerCast(
-                                $this->context->constantFromString("%.*s"),
-                                $this->context->getTypeFromString('char*')
-                            );
-                            $offset = $this->context->structFieldMap[$argValue->typeOf()->getElementType()->getName()]['length'];
-                            $__str__length = $this->context->builder->load(
-                                $this->context->builder->structGep($argValue, $offset)
-                            );
-                            $offset = $this->context->structFieldMap[$argValue->typeOf()->getElementType()->getName()]['value'];
-                            $__str__value = $this->context->builder->structGep($argValue, $offset);
-                            $this->context->builder->call(
-                                $this->context->lookupFunction('printf'),
-                                $fmt
-                                , $__str__length
-                                , $__str__value
-
-                            );
-
-                            break;
-                        case Variable::TYPE_NATIVE_LONG:
-                            $fmt = $this->context->builder->pointerCast(
-                                $this->context->constantFromString("%lld"),
-                                $this->context->getTypeFromString('char*')
-                            );
-                            $this->context->builder->call(
-                                $this->context->lookupFunction('printf'),
-                                $fmt
-                                , $argValue
-
-                            );
-
-                            break;
-                        case Variable::TYPE_NATIVE_DOUBLE:
-                            $fmt = $this->context->builder->pointerCast(
-                                $this->context->constantFromString("%G"),
-                                $this->context->getTypeFromString('char*')
-                            );
-                            $this->context->builder->call(
-                                $this->context->lookupFunction('printf'),
-                                $fmt
-                                , $argValue
-
-                            );
-
-                            break;
-                        case Variable::TYPE_NATIVE_BOOL:
-                            $bool = $this->context->castToBool($argValue);
-                            $prev = $this->context->builder->getInsertBlock();
-                            $ifBlock = $prev->insertBasicBlock('ifBlock');
-                            $prev->moveBefore($ifBlock);
-
-                            $endBlock[] = $tmp = $ifBlock->insertBasicBlock('endBlock');
-                            $this->context->builder->branchIf($bool, $ifBlock, $tmp);
-
-                            $this->context->builder->positionAtEnd($ifBlock);
-                            {
-                                $fmt = $this->context->builder->pointerCast(
-                                    $this->context->constantFromString("1"),
-                                    $this->context->getTypeFromString('char*')
-                                );
-                                $this->context->builder->call(
-                                    $this->context->lookupFunction('printf'),
-                                    $fmt
-
-                                );
-                            }
-                            if ($this->context->builder->getInsertBlock()->getTerminator() === null) {
-                                $this->context->builder->branch(end($endBlock));
-                            }
-
-                            $this->context->builder->positionAtEnd(array_pop($endBlock));
-
-                            break;
-
-                        default:
-                            throw new \LogicException("Echo for type $arg->type not implemented");
-                    }
-                    if ($op->type === OpCode::TYPE_PRINT) {
-                        $this->assignOperand(
-                            $block->getOperand($op->arg1),
-                            new Variable($this->context, Variable::TYPE_NATIVE_LONG, Variable::KIND_VALUE, $this->context->constantFromInteger(1))
-                        );
-                    }
-                    break;
-                case OpCode::TYPE_MUL:
-                case OpCode::TYPE_PLUS:
-                case OpCode::TYPE_MINUS:
-                case OpCode::TYPE_DIV:
-                case OpCode::TYPE_MODULO:
-                case OpCode::TYPE_BITWISE_AND:
-                case OpCode::TYPE_BITWISE_OR:
-                case OpCode::TYPE_BITWISE_XOR:
-                case OpCode::TYPE_GREATER_OR_EQUAL:
-                case OpCode::TYPE_SMALLER_OR_EQUAL:
-                case OpCode::TYPE_GREATER:
-                case OpCode::TYPE_SMALLER:
-                case OpCode::TYPE_IDENTICAL:
-                case OpCode::TYPE_EQUAL:
-                    $this->assignOperand(
-                        $block->getOperand($op->arg1),
-                        $this->context->helper->binaryOp(
-                            $op,
-                            $this->context->getVariableFromOp($block->getOperand($op->arg2)),
-                            $this->context->getVariableFromOp($block->getOperand($op->arg3))
-                        )
-                    );
-                    break;
-                case OpCode::TYPE_UNARY_MINUS:
-                    $this->assignOperand(
-                        $block->getOperand($op->arg1),
-                        $this->context->helper->unaryOp(
-                            $op,
-                            $this->context->getVariableFromOp($block->getOperand($op->arg2)),
-                        )
-                    );
-                    break;
-                // case OpCode::TYPE_CASE:
-                case OpCode::TYPE_JUMP:
-                    $newBlock = $this->compileBlockInternal($func, $op->block1, ...$args);
-                    $builder->positionAtEnd($basicBlock);
-                    $this->context->freeDeadVariables($func, $basicBlock, $block);
-                    $builder->branch($newBlock);
-                    return $origBasicBlock;
-                case OpCode::TYPE_JUMPIF:
-                    $if = $this->compileBlockInternal($func, $op->block1, ...$args);
-                    $else = $this->compileBlockInternal($func, $op->block2, ...$args);
-
-                    $builder->positionAtEnd($basicBlock);
-
-                    $condition = $this->context->castToBool(
-                        $this->context->helper->loadValue($this->context->getVariableFromOp($block->getOperand($op->arg1)))
+                    $arg = $block->getOperand(
+                        $op->type === OpCode::TYPE_ECHO ? $op->arg1 : $op->arg2
                     );
 
-                    $this->context->freeDeadVariables($func, $basicBlock, $block);
-                    $builder->branchIf($condition, $if, $else);
-                    return $origBasicBlock;
-                case OpCode::TYPE_RETURN_VOID:
-                    $this->context->freeDeadVariables($func, $basicBlock, $block);
-                    $this->context->builder->returnVoid();
-
-                    return $origBasicBlock;
-                case OpCode::TYPE_RETURN:
-                    $return = $this->context->getVariableFromOp($block->getOperand($op->arg1));
-                    $return->addref();
-                    $retval = $this->context->helper->loadValue($return);
-                    $this->context->freeDeadVariables($func, $basicBlock, $block);
-                    $this->context->builder->returnValue($retval);
-
-                    return $origBasicBlock;
-                case OpCode::TYPE_FUNCDEF:
-                    $nameOp = $block->getOperand($op->arg1);
-                    assert($nameOp instanceof Operand\Literal);
-                    $this->compileBlock($op->block1, $nameOp->value);
-                    break;
-                case OpCode::TYPE_FUNCCALL_INIT:
-                    $nameOp = $block->getOperand($op->arg1);
-                    if (!$nameOp instanceof Operand\Literal) {
-                        throw new \LogicException("Variable function calls not yet supported");
-                    }
-                    $lcname = strtolower($nameOp->value);
-                    if (isset($this->context->functionProxies[$lcname])) {
-                        $this->context->scope->toCall = $this->context->functionProxies[$lcname];
-                    } else {
-                        throw new \RuntimeException("Call to undefined function $lcname");
-                    }
-                    $this->context->scope->args = [];
-                    break;
-                case OpCode::TYPE_ARG_SEND:
-                    $this->context->scope->args[] = $this->context->getVariableFromOp($block->getOperand($op->arg1));
-                    break;
-                case OpCode::TYPE_FUNCCALL_EXEC_NORETURN:
-                    if (is_null($this->context->scope->toCall)) {
-                        // short circuit
-                        break;
-                    }
-                    $this->context->scope->toCall->call($this->context, ...$this->context->scope->args);
-                    break;
-                case OpCode::TYPE_FUNCCALL_EXEC_RETURN:
-                    $result = $this->context->scope->toCall->call($this->context, ...$this->context->scope->args);
-                    $this->assignOperandValue($block->getOperand($op->arg1), $result);
-                    break;
-                // case OpCode::TYPE_DECLARE_CLASS:
-                //     $this->context->pushScope();
-                //     $this->context->scope->classId = $this->context->type->object->declareClass($block->getOperand($op->arg1));
-                //     $this->compileClass($op->block1, $this->context->scope->classId);
-                //     $this->context->popScope();
-                //     break;
-                // case OpCode::TYPE_NEW:
-                //     $class = $this->context->type->object->lookupOperand($block->getOperand($op->arg2));
-                //     $this->context->helper->assign(
-                //         $gccBlock,
-                //         $this->context->getVariableFromOp($block->getOperand($op->arg1))->lvalue,
-                //         $this->context->type->object->allocate($class)
-                //     );
-                //     $this->context->scope->toCall = null;
-                //     $this->context->scope->args = [];
-                //     break;
-                // case OpCode::TYPE_PROPERTY_FETCH:
-                //     $result = $block->getOperand($op->arg1);
-                //     $obj = $block->getOperand($op->arg2);
-                //     $name = $block->getOperand($op->arg3);
-                //     assert($name instanceof Operand\Literal);
-                //     assert($obj->type->type === Type::TYPE_OBJECT);
-                //     $this->context->scope->variables[$result] = $this->context->type->object->propertyFetch(
-                //         $this->context->getVariableFromOp($obj)->rvalue,
-                //         $obj->type->userType,
-                //         $name->value
-                //     );
-                //     break;
-                default:
-                    throw new \LogicException("Unknown JIT opcode: " . $op->getType());
+                    $this->functionCalls[] = new FunctionCall(
+                        'printf',
+                        ["%d", new VariableReference($arg->original->name->value)]
+                    );
             }
         }
-        throw new \LogicException("Reached the end of the loop, this shouldn't happen...");
     }
 
     private function compileClass(?Block $block, int $classId)

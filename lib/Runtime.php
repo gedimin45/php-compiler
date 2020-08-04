@@ -171,6 +171,13 @@ C . "\n";
 int {$stmt->name()} = {$stmt->value()};
 C . "\n";
                 }
+
+                if ($type === 'array') {
+                    $arrayDef = '{' . implode(', ', $stmt->value()) . '}';
+                    $output .= <<<C
+int {$stmt->name()}[] = {$arrayDef};
+C . "\n";
+                }
             }
 
             if ($stmt instanceof FunctionCall) {

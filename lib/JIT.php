@@ -189,41 +189,48 @@ class JIT
             $op = $block->opCodes[$i];
             switch ($op->type) {
                 case OpCode::TYPE_ASSIGN:
-                    $value = $block->getOperand($op->arg3)->value;
-
-                    $orignal = $block->getOperand($op->arg2);
-                    $depth = 0;
-                    while (!($orignal instanceof Operand\Variable) && $depth < 10) {
-                        $orignal = $orignal->original;
-                        $depth++;
+                    // array variables are defined in TYPE_INIT_ARRAY
+                    // TYPE_ASSIGN($10, $11, $7)
+                    if (array_key_exists($op->arg3, $this->variableDefs)) {
+                        $targetVariable = $this->variableDefs[$op->arg3];
+                        $this->variableDefs[$op->arg2] = new \PHPCompiler\Cgen\VariableDefinition(
+                            $targetVariable->type(),
+                            'var_' . $op->arg2,
+                            $targetVariable->value()
+                        );
+                        break;
                     }
 
-                    $varName = $orignal->name->value;
+                    // TYPE_ASSIGN($3, $4, LITERAL('abc'))
+                    // TYPE_ECHO($4, null, null)
+
+                    $value = $this->unrollTemporary($block->getOperand($op->arg3))->value;
+
                     $this->variableDefs[$op->arg2] = new \PHPCompiler\Cgen\VariableDefinition(
                         gettype($value),
-                        $varName,
+                        'var_' . $op->arg2,
                         $value
                     );
                     break;
 
                 case OpCode::TYPE_ECHO:
                 case OpCode::TYPE_PRINT:
+//                    TYPE_ECHO($12, null, null)
+
                     $argOffset = $op->type === OpCode::TYPE_ECHO ? $op->arg1 : $op->arg2;
                     $arg = $block->getOperand($argOffset);
 
                     if ($arg instanceof Operand\Literal) {
                         if (is_string($arg->value)) {
                             $format = '%s';
-                            $value = str_replace("\n", '\n', $arg->value);
+                            $element = str_replace("\n", '\n', $arg->value);
                         } else {
                             $format = '%d';
-                            $value = $arg->value;
+                            $element = $arg->value;
                         }
-                        $this->functionCalls[] = new FunctionCall('printf', [$format, $value]);
+                        $this->functionCalls[] = new FunctionCall('printf', [$format, $element]);
                         break;
                     }
-
-                    $varName = $arg->original->name->value;
 
                     $var = $this->variableDefs[$argOffset];
                     switch ($var->type()) {
@@ -238,7 +245,53 @@ class JIT
 
                     $this->functionCalls[] = new FunctionCall(
                         'printf',
-                        [$format, new VariableReference($varName)]
+                        [$format, new VariableReference('var_' . $argOffset)]
+                    );
+
+                    break;
+
+                case OpCode::TYPE_INIT_ARRAY:
+//                TYPE_INIT_ARRAY($7, LITERAL(6), null)
+
+                    $element = $this->unrollTemporary($block->getOperand($op->arg2))->value;
+
+                    $this->variableDefs[$op->arg1] = new \PHPCompiler\Cgen\VariableDefinition(
+                        'array',
+                        'var_' . $op->arg1,
+                        [$element],
+                    );
+
+                    break;
+
+                case OpCode::TYPE_ADD_ARRAY_ELEMENT:
+//                TYPE_ADD_ARRAY_ELEMENT($7, LITERAL(8), null)
+
+                    $element = $this->unrollTemporary($block->getOperand($op->arg2))->value;
+
+                    $array = $this->variableDefs[$op->arg1]->value();
+                    $array[] = $element;
+                    $this->variableDefs[$op->arg1] = new \PHPCompiler\Cgen\VariableDefinition(
+                        'array',
+                        'var_' . $op->arg1,
+                        $array,
+                    );
+
+                    break;
+
+                case OpCode::TYPE_ARRAY_DIM_FETCH:
+//                    TYPE_ADD_ARRAY_ELEMENT($7, LITERAL(8), null)
+//                    TYPE_ASSIGN($10, $11, $7)
+//                    TYPE_ARRAY_DIM_FETCH($12, $11, LITERAL(0))
+//                    TYPE_ECHO($12, null, null)
+
+                    $index = $block->getOperand($op->arg3)->value;
+
+                    $val = $this->variableDefs[$op->arg2]->value()[$index];
+
+                    $this->variableDefs[$op->arg1] = new \PHPCompiler\Cgen\VariableDefinition(
+                        gettype($val),
+                        'var_' . $op->arg1,
+                        $val,
                     );
 
                     break;
@@ -353,5 +406,15 @@ class JIT
             $result->value
         );
         $result->addref();
+    }
+
+    private function unrollTemporary(Operand $original)
+    {
+        $depth = 0;
+        while ($original instanceof Operand\Temporary && $depth < 10) {
+            $original = $original->original;
+            $depth++;
+        }
+        return $original;
     }
 }

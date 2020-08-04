@@ -154,7 +154,8 @@ class Runtime {
     }
 
     public function standalone(?Block $block, string $outfile) {
-        $stmts = $this->loadJit()->compile($block);
+        $cgen = new Cgen();
+        $stmts = $cgen->compile($block);
 
         $output = '';
 

@@ -14,6 +14,7 @@ namespace PHPCompiler;
 
 use PHPCfg\Op;
 use PHPCfg\Operand;
+use PHPCompiler\Cgen\ArrayAccess;
 use PHPCompiler\Cgen\FunctionCall;
 use PHPCompiler\Cgen\VariableDefinition;
 use PHPCompiler\Cgen\VariableReference;
@@ -194,9 +195,9 @@ class JIT
                     if (array_key_exists($op->arg3, $this->variableDefs)) {
                         $targetVariable = $this->variableDefs[$op->arg3];
                         $this->variableDefs[$op->arg2] = new \PHPCompiler\Cgen\VariableDefinition(
-                            $targetVariable->type(),
+                            'intref',
                             'var_' . $op->arg2,
-                            $targetVariable->value()
+                            'var_' . $op->arg3,
                         );
                         break;
                     }
@@ -286,12 +287,10 @@ class JIT
 
                     $index = $block->getOperand($op->arg3)->value;
 
-                    $val = $this->variableDefs[$op->arg2]->value()[$index];
-
                     $this->variableDefs[$op->arg1] = new \PHPCompiler\Cgen\VariableDefinition(
-                        gettype($val),
+                        'integer', // todo this should be determined based on array contents
                         'var_' . $op->arg1,
-                        $val,
+                        new ArrayAccess('var_'.$op->arg2, $index),
                     );
 
                     break;

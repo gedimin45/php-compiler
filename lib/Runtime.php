@@ -15,6 +15,7 @@ use PHPCfg\Traverser;
 use PHPCfg\LivenessDetector;
 use PHPCfg\Visitor;
 use PHPCfg\Script;
+use PHPCompiler\Cgen\ArrayAccess;
 use PHPCompiler\Cgen\FunctionCall;
 use PHPCompiler\Cgen\VariableDefinition;
 use PHPCompiler\Cgen\VariableReference;
@@ -167,8 +168,12 @@ C . "\n";
                 }
 
                 if ($type === 'integer') {
+                    $rightOperand = $stmt->value();
+                    if ($rightOperand instanceof ArrayAccess) {
+                        $rightOperand = $rightOperand->variableName() . '[' . $rightOperand->index() . ']';
+                    }
                     $output .= <<<C
-int {$stmt->name()} = {$stmt->value()};
+int {$stmt->name()} = {$rightOperand};
 C . "\n";
                 }
 
@@ -176,6 +181,12 @@ C . "\n";
                     $arrayDef = '{' . implode(', ', $stmt->value()) . '}';
                     $output .= <<<C
 int {$stmt->name()}[] = {$arrayDef};
+C . "\n";
+                }
+
+                if ($type === 'intref') {
+                    $output .= <<<C
+int *{$stmt->name()} = {$stmt->value()};
 C . "\n";
                 }
             }

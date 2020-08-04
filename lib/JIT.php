@@ -211,6 +211,18 @@ class JIT
                     $argOffset = $op->type === OpCode::TYPE_ECHO ? $op->arg1 : $op->arg2;
                     $arg = $block->getOperand($argOffset);
 
+                    if ($arg instanceof Operand\Literal) {
+                        if (is_string($arg->value)) {
+                            $format = '%s';
+                            $value = str_replace("\n", '\n', $arg->value);
+                        } else {
+                            $format = '%d';
+                            $value = $arg->value;
+                        }
+                        $this->functionCalls[] = new FunctionCall('printf', [$format, $value]);
+                        break;
+                    }
+
                     $varName = $arg->original->name->value;
 
                     $var = $this->variableDefs[$argOffset];
@@ -342,5 +354,4 @@ class JIT
         );
         $result->addref();
     }
-
 }

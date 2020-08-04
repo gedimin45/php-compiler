@@ -15,6 +15,7 @@ namespace PHPCompiler;
 use PHPCfg\Op;
 use PHPCfg\Operand;
 use PHPCompiler\Cgen\FunctionCall;
+use PHPCompiler\Cgen\VariableDefinition;
 use PHPCompiler\Cgen\VariableReference;
 use PHPCompiler\Func as CoreFunc;
 use PHPCompiler\JIT\Context;
@@ -38,6 +39,8 @@ class JIT
     private array $queue = [];
 
     public Context $context;
+
+    /** @var VariableDefinition[] */
     private array $variableDefs = [];
     private array $functionCalls = [];
 
@@ -205,14 +208,28 @@ class JIT
 
                 case OpCode::TYPE_ECHO:
                 case OpCode::TYPE_PRINT:
-                    $arg = $block->getOperand(
-                        $op->type === OpCode::TYPE_ECHO ? $op->arg1 : $op->arg2
-                    );
+                    $argOffset = $op->type === OpCode::TYPE_ECHO ? $op->arg1 : $op->arg2;
+                    $arg = $block->getOperand($argOffset);
+
+                    $varName = $arg->original->name->value;
+
+                    $var = $this->variableDefs[$argOffset];
+                    switch ($var->type()) {
+                        case 'string':
+                            $format = "%s";
+                            break;
+
+                        case 'integer':
+                            $format = "%d";
+                            break;
+                    }
 
                     $this->functionCalls[] = new FunctionCall(
                         'printf',
-                        ["%d", new VariableReference($arg->original->name->value)]
+                        [$format, new VariableReference($varName)]
                     );
+
+                    break;
             }
         }
     }

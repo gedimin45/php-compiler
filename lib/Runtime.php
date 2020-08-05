@@ -162,10 +162,19 @@ class Runtime {
         foreach ($stmts as $stmt) {
             if ($stmt instanceof VariableDefinition) {
                 $type = $stmt->type();
+
                 if ($type === 'string') {
-                    $output .= <<<C
-char {$stmt->name()}[] = "{$stmt->value()}";
-C . "\n";
+                    $leftOperand = "char {$stmt->name()}[]";
+                    $rightOperand = $stmt->value();
+
+                    if ($rightOperand instanceof ArrayAccess) {
+                        $leftOperand = "char *{$stmt->name()}";
+                        $rightOperand = $rightOperand->variableName() . '[' . $rightOperand->index() . ']';
+                    } else {
+                        $rightOperand = '"' . $rightOperand . '"';
+                    }
+
+                    $output .= "{$leftOperand} = {$rightOperand};\n";
                 }
 
                 if ($type === 'integer') {
@@ -178,16 +187,30 @@ int {$stmt->name()} = {$rightOperand};
 C . "\n";
                 }
 
-                if ($type === 'array') {
+                if ($type === 'integer_array') {
                     $arrayDef = '{' . implode(', ', $stmt->value()) . '}';
                     $output .= <<<C
 int {$stmt->name()}[] = {$arrayDef};
 C . "\n";
                 }
 
-                if ($type === 'intref') {
+                if ($type === 'string_array') {
+                    $quotedElements = array_map(fn ($element) => '"' . $element . '"', $stmt->value());
+                    $arrayDef = '{' . implode(', ', $quotedElements) . '}';
+                    $output .= <<<C
+char *{$stmt->name()}[] = {$arrayDef};
+C . "\n";
+                }
+
+                if ($type === 'integer_array_ref') {
                     $output .= <<<C
 int *{$stmt->name()} = {$stmt->value()};
+C . "\n";
+                }
+
+                if ($type === 'string_array_ref') {
+                    $output .= <<<C
+char *{$stmt->name()}[] = {$stmt->value()};
 C . "\n";
                 }
             }

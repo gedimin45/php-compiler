@@ -71,12 +71,24 @@ class Cgen
                     // array variables are defined in TYPE_INIT_ARRAY
                     // TYPE_ASSIGN($10, $11, $7)
                     if (array_key_exists($op->arg3, $this->variableDefs)) {
+                        // TODO eliminate temporary variables
+
                         $targetVariable = $this->variableDefs[$op->arg3];
-                        $this->variableDefs[$op->arg2] = new \PHPCompiler\Cgen\VariableDefinition(
-                            'intref',
-                            'var_' . $op->arg2,
-                            'var_' . $op->arg3,
-                        );
+
+                        if ($targetVariable->type() === 'string_array') {
+                            $this->variableDefs[$op->arg2] = new \PHPCompiler\Cgen\VariableDefinition(
+                                $targetVariable->type(),
+                                'var_' . $op->arg2,
+                                $targetVariable->value(),
+                            );
+                        } else {
+                            $this->variableDefs[$op->arg2] = new \PHPCompiler\Cgen\VariableDefinition(
+                                $targetVariable->type() . '_ref',
+                                'var_' . $op->arg2,
+                                'var_' . $op->arg3,
+                            );
+                        }
+
                         break;
                     }
 
@@ -135,7 +147,7 @@ class Cgen
                     $element = $this->unrollTemporary($block->getOperand($op->arg2))->value;
 
                     $this->variableDefs[$op->arg1] = new \PHPCompiler\Cgen\VariableDefinition(
-                        'array',
+                        gettype($element) . '_array',
                         'var_' . $op->arg1,
                         [$element],
                     );
@@ -150,7 +162,7 @@ class Cgen
                     $array = $this->variableDefs[$op->arg1]->value();
                     $array[] = $element;
                     $this->variableDefs[$op->arg1] = new \PHPCompiler\Cgen\VariableDefinition(
-                        'array',
+                        gettype($element) . '_array',
                         'var_' . $op->arg1,
                         $array,
                     );
@@ -165,8 +177,10 @@ class Cgen
 
                     $index = $block->getOperand($op->arg3)->value;
 
+                    $type = $this->variableDefs[$op->arg2]->type() === 'integer_array_ref' ? 'integer' : 'string';
+
                     $this->variableDefs[$op->arg1] = new \PHPCompiler\Cgen\VariableDefinition(
-                        'integer', // todo this should be determined based on array contents
+                        $type,
                         'var_' . $op->arg1,
                         new ArrayAccess('var_'.$op->arg2, $index),
                     );

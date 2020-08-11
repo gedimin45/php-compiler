@@ -321,8 +321,13 @@ final class Variable {
                 if (!$this->type & self::IS_NATIVE_ARRAY) {
                     throw new \LogicException("Unsupported dim fetch on " . self::getStringType($this->type));
                 }
-                $offset = $dim->castTo(self::TYPE_NATIVE_LONG);
-                $value = $this->context->builder->inBoundsGep($this->value, $dim->value);
+
+                $value = $this->context->builder->inBoundsGep(
+                    $this->value,
+                    $this->context->constantFromInteger(0),
+                    $dim->value,
+                );
+
                 return new Variable(
                     $this->context,
                     $this->type & (~self::IS_NATIVE_ARRAY),

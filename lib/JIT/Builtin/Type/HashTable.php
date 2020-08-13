@@ -1,5 +1,8 @@
 <?php
 
+// This file is generated and changes you make will be lost.
+// Change /compiler/lib/JIT/Builtin/Type/HashTable.pre instead.
+
 /*
  * This file is part of PHP-Compiler, a PHP CFG Compiler for PHP code
  *
@@ -10,80 +13,176 @@
 namespace PHPCompiler\JIT\Builtin\Type;
 
 use PHPCompiler\JIT\Builtin\Type;
+use PHPCompiler\JIT\Builtin\Refcount;
+use PHPCompiler\JIT\Variable;
+
+use PHPLLVM;
 
 class HashTable extends Type {
-    private \gcc_jit_struct_ptr $struct;
-    public \gcc_jit_type_ptr $pointer;
-    private \gcc_jit_struct_ptr $bucketStruct;
-    public \gcc_jit_type_ptr $bucketPointer;
-    private \gcc_jit_lvalue_ptr $size;
-
-    protected array $fields;
-
-    protected array $bucketFields;
+    public PHPLLVM\Type $pointer;
 
     public function register(): void {
-        /*
-        $this->struct = \gcc_jit_context_new_opaque_struct(
-            $this->context->context,
-            null,
-            '__ht__'
-        );
-        $this->context->registerType(
-            '__ht__',
-            \gcc_jit_struct_as_type($this->struct)
-        );
-        $this->bucketStruct = \gcc_jit_context_new_opaque_struct(
-            $this->context->context,
-            null,
-            '__htbucket__'
-        );
-        $this->context->registerType(
-            '__htbucket__',
-            \gcc_jit_struct_as_type($this->struct)
-        );
-        $this->pointer = $this->context->getTypeFromString('__ht__*');
-        $this->bucketPointer = $this->context->getTypeFromString('__htbucket__*');
-        */
+
+
+
+
+        $struct___cfcd208495d565ef66e7dff9f98764da = $this->context->context->namedStructType('__hashtable__');
+            // declare first so recursive structs are possible :)
+            $this->context->registerType('__hashtable__', $struct___cfcd208495d565ef66e7dff9f98764da);
+            $this->context->registerType('__hashtable__' . '*', $struct___cfcd208495d565ef66e7dff9f98764da->pointerType(0));
+            $this->context->registerType('__hashtable__' . '**', $struct___cfcd208495d565ef66e7dff9f98764da->pointerType(0)->pointerType(0));
+            $struct___cfcd208495d565ef66e7dff9f98764da->setBody(
+                false ,  // packed
+                $this->context->getTypeFromString('__ref__')
+                , $this->context->getTypeFromString('size_t')
+
+            );
+            $this->context->structFieldMap['__hashtable__'] = [
+                'ref' => 0
+                , 'size' => 1
+
+            ];
+
+
+
+
+
+        $struct___cfcd208495d565ef66e7dff9f98764da = $this->context->context->namedStructType('__htbucket__');
+            // declare first so recursive structs are possible :)
+            $this->context->registerType('__htbucket__', $struct___cfcd208495d565ef66e7dff9f98764da);
+            $this->context->registerType('__htbucket__' . '*', $struct___cfcd208495d565ef66e7dff9f98764da->pointerType(0));
+            $this->context->registerType('__htbucket__' . '**', $struct___cfcd208495d565ef66e7dff9f98764da->pointerType(0)->pointerType(0));
+            $struct___cfcd208495d565ef66e7dff9f98764da->setBody(
+                false ,  // packed
+                $this->context->getTypeFromString('size_t')
+                , $this->context->getTypeFromString('size_t')
+                , $this->context->getTypeFromString('__value__')
+
+            );
+            $this->context->structFieldMap['__htbucket__'] = [
+                'hash' => 0
+                , 'key' => 1
+                , 'value' => 2
+
+            ];
+
+    $fntype___cfcd208495d565ef66e7dff9f98764da = $this->context->context->functionType(
+                $this->context->getTypeFromString('__htbucket__*'),
+                false ,
+                $this->context->getTypeFromString('__hashtable__*')
+                , $this->context->getTypeFromString('size_t')
+
+            );
+            $fn___cfcd208495d565ef66e7dff9f98764da = $this->context->module->addFunction('__hashtable__search', $fntype___cfcd208495d565ef66e7dff9f98764da);
+
+
+
+
+            $this->context->registerFunction('__hashtable__search', $fn___cfcd208495d565ef66e7dff9f98764da);
+
+
+
+
+
+
+        $this->pointer = $this->context->getTypeFromString('__hashtable__*');
     }
 
-    public function implement(): void {
-        /*
-        $this->size = \gcc_jit_context_new_global(
-            $this->context->context,
-            null,
-            \GCC_JIT_GLOBAL_INTERNAL,
-            $this->context->getTypeFromString('size_t'),
-            '__ht__size'
+    public function implement(): void
+    {
+        $this->implementSearch();
+    }
+
+    private function implementSearch()
+    {
+        $builder = $this->context->builder;
+
+        $hashtableSearchFn = $this->context->lookupFunction('__hashtable__search');
+
+        $mainBlock = $hashtableSearchFn->appendBasicBlock('main');
+        $builder->positionAtEnd($mainBlock);
+
+        $hashTable = $hashtableSearchFn->getParam(0);
+        $key = $hashtableSearchFn->getParam(1);
+
+        $prev = $this->context->builder->getInsertBlock();
+
+        $loopBlock = $prev->insertBasicBlock('loop');
+        $prev->moveBefore($loopBlock);
+
+        $returnNullBlock = $prev->insertBasicBlock('returnNull');
+        $prev->moveBefore($returnNullBlock);
+
+        $iterateBlock = $prev->insertBasicBlock('iterate');
+        $prev->moveBefore($iterateBlock);
+
+        $returnElementBlock = $prev->insertBasicBlock('returnElement');
+        $prev->moveBefore($returnElementBlock);
+
+        $nextCellBlock = $prev->insertBasicBlock('nextCell');
+        $prev->moveBefore($nextCellBlock);
+
+        $returnBlock = $prev->insertBasicBlock('return');
+        $prev->moveBefore($returnBlock);
+
+        $sizeTType = $this->context->getTypeFromString('size_t');
+
+        $type = $this->context->getTypeFromString('__htbucket__[20]');
+        $elementsPointer = $builder->alloca($type);
+        // todo store into $elements
+        $indexPointer = $builder->alloca($sizeTType);
+        $builder->store($sizeTType->constInt(0, false), $indexPointer);
+        $currentElementPointer = $builder->alloca($this->context->getTypeFromString('__htbucket__'));
+        $elementToReturnPointer = $builder->alloca(
+            $this->context->getTypeFromString('__htbucket__*')
         );
-        $this->fields = [
-            'refcount' => $this->context->refcount->asField('refcount'),
-            'flags' => $this->context->helper->createField('flags', 'unsigned char'),
-            'size' => $this->context->helper->createField('size', 'size_t'),
-            'mask' => $this->context->helper->createField('mask', 'size_t'),
-            'numUsed' => $this->context->helper->createField('numUsed', 'size_t'),
-            'numElements' => $this->context->helper->createField('numElements', 'size_t'),
-            'nextFreeElement' => $this->context->helper->createField('nextFreeElement', 'size_t'),
-            'indexes' => $this->context->helper->createField('indexes', 'size_t*'),
-            'buckets' => $this->context->helper->createField('buckets', '__htbucket__*'),
-        ];
-        \gcc_jit_struct_set_fields(
-            $this->struct,
-            null,
-            count($this->fields),
-            \gcc_jit_field_ptr_ptr::fromArray(...array_values($this->fields))
+        $builder->branch($loopBlock);
+
+        $builder->positionAtEnd($loopBlock);
+        $index = $builder->load($indexPointer);
+        $elementPointer = $builder->inBoundsGep($elementsPointer, $sizeTType->constInt(0, false), $index);
+        $element = $builder->load($elementPointer);
+        $builder->store($element, $currentElementPointer);
+        $comparisonResult = $builder->iCmp(\PHPLLVM\Builder::INT_EQ, $elementPointer, $elementPointer->typeOf()->constNull());
+        $builder->branchIf($comparisonResult, $returnNullBlock, $iterateBlock);
+
+        $builder->positionAtEnd($iterateBlock);
+//        $currentElement = $builder->load($currentElementPointer);
+//        $builder->gep($currentElementPointer, $this->context->getTypeFromString('size_t')->constInt(1, false));
+        $elementKey = $builder->load($builder->structGep($currentElementPointer, 1));
+        $comparisonResult = $builder->iCmp(\PHPLLVM\Builder::INT_EQ, $elementKey, $key);
+        $builder->branchIf($comparisonResult, $returnElementBlock, $nextCellBlock);
+
+        $builder->positionAtEnd($returnElementBlock);
+        $builder->store($currentElementPointer, $elementToReturnPointer);
+        $builder->branch($returnBlock);
+
+        $builder->positionAtEnd($returnNullBlock);
+        $builder->store($this->context->getTypeFromString('__htbucket__*')->constNull(), $elementToReturnPointer);
+        $builder->branch($returnBlock);
+
+        $builder->positionAtEnd($returnBlock);
+        $elementToReturn = $builder->load($elementToReturnPointer);
+        $builder->returnValue($elementToReturn);
+
+        $builder->positionAtEnd($nextCellBlock);
+        $index = $builder->load($indexPointer);
+        $builder->store(
+            $builder->add($index, $sizeTType->constInt(1, false)),
+            $indexPointer,
         );
-        $this->bucketFields = [
-            'hash' => $this->context->helper->createField('hash', 'size_t'),
-            'key' => $this->context->helper->createField('key', '__string__*'),
-            'value' => $this->context->helper->createField('value', '__value__')
-        ];
-        \gcc_jit_struct_set_fields(
-            $this->bucketStruct,
-            null,
-            count($this->bucketFields),
-            \gcc_jit_field_ptr_ptr::fromArray(...array_values($this->bucketFields))
-        );
-        */
+        $builder->branch($iterateBlock);
+
+        $builder->clearInsertionPosition();
+    }
+
+    public function initialize(): void {
+    }
+
+    public function init(
+        PHPLLVM\Value $dest,
+        PHPLLVM\Value $value,
+        PHPLLVM\Value $length
+    ): void {
     }
 }

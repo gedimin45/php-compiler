@@ -122,7 +122,12 @@ final class Variable {
             // see if it can be converted into a native array
             if (!$context->analyzer->canEscape($op)) {
                 $size = $context->analyzer->computeStaticArraySize($op);
-                if (!is_null($size) && !$context->analyzer->hasDynamicArrayAppend($op, $size)) {
+
+                if (is_null($size) || $context->analyzer->hasDynamicArrayAppend($op, $size)) {
+                    throw new \Exception('Could not compute static array size or array has dynamic appends.');
+                }
+
+                if ($context->analyzer->isList($op)) {
                     $origType = self::getTypeFromType($op->type->subTypes[0]);
                     $type = self::IS_NATIVE_ARRAY | $origType;
                     $stringType = self::getStringType($origType) . '[' . $size . ']';
@@ -132,7 +137,6 @@ final class Variable {
                     $origType = self::getTypeFromType($op->type->subTypes[0]);
                     $type = self::IS_NATIVE_ARRAY | $origType;
 
-                    $size = 3;
                     $stringType = "__htbucket__*[{$size}]";
                     $elements = $builder->alloca($context->getTypeFromString($stringType));
                     $hashIndexPointer = $builder->alloca($context->getTypeFromString('size_t'));
@@ -174,6 +178,7 @@ final class Variable {
                 }
             }
         }
+
         return new Variable(
             $context,
             $type,
@@ -375,10 +380,7 @@ final class Variable {
                         $fn,
                         $this->context->getTypeFromString('size_t')->constInt(1, false)
                     );
-                    $value = $this->context->builder->structGep(
-                        $ptr,
-                        2,
-                    );
+                    $value = $this->context->builder->structGep($ptr, 2,);
                 } else {
                     $value = $this->context->builder->inBoundsGep(
                         $this->value,

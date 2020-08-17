@@ -79,8 +79,8 @@ class Analyzer
                             // this means that it's a write, disallow it
                             return true;
                         }
-                    } elseif ($usage->dim->type->type !== Type::TYPE_LONG) {
-                        return true;
+//                    } elseif ($usage->dim->type->type !== Type::TYPE_LONG) {
+//                        return true;
                     } elseif ($usage->dim->value >= $size) {
                         return true;
                     }
@@ -110,7 +110,7 @@ class Analyzer
             if ($op instanceof Op\Expr\Array_) {
                 $newSize = 0;
                 foreach ($op->keys as $key) {
-                    if ($key instanceof Operand\NullOperand) {
+                    if ($key instanceof Operand\NullOperand || $key->type->type === Type::TYPE_STRING) {
                         ++$newSize;
                     } elseif (! $key instanceof Operand\Literal || $key->type->type !== Type::TYPE_LONG) {
                         return null;
@@ -131,5 +131,26 @@ class Analyzer
         }
 
         return $size;
+    }
+
+    public function isList(Operand $operand): bool
+    {
+        foreach ($operand->ops as $op) {
+            if ($op instanceof Op\Expr\Array_) {
+                foreach ($op->keys as $key) {
+                    if (!($key instanceof Operand\NullOperand) && $key->type->type !== Type::TYPE_LONG) {
+                        return false;
+                    }
+
+                    return true;
+                }
+            } elseif ($op instanceof Op\Expr\Assign) {
+                return $this->isList($op->expr);
+            } else {
+                throw new \LogicException('Unknown array write op: '.get_class($op));
+            }
+        }
+
+        return false;
     }
 }

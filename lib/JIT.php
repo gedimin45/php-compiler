@@ -223,12 +223,11 @@ class JIT {
 
                         $this->context->builder->store(
                             $this->context->helper->loadValue($arrayElement),
-                            $this->context->builder->structGep($result->value, $idx),
+                            $this->context->builder->structGep($result->value, $idx)
                         );
 
                         $result->nextFreeElement = max($result->nextFreeElement, $idx + 1);
                     } else {
-                        $result = $this->context->getVariableFromOp($block->getOperand($op->arg1));
 //                        throw new \LogicException('Hash tables not implemented yet');
                     }
                     break;
@@ -240,15 +239,15 @@ class JIT {
                         $value = $this->context->castToBool($this->context->helper->loadValue($from));
                     }
                     $__right = $value->typeOf()->constInt(1, false);
+                            
+                        
 
+                        
 
-
-
-
-
+                        
 
                         $result = $this->context->builder->bitwiseXor($value, $__right);
-
+    
 
                     $this->assignOperandValue($block->getOperand($op->arg1), $result);
                     break;
@@ -288,11 +287,11 @@ class JIT {
                     switch ($arg->type) {
                         case Variable::TYPE_VALUE:
                             $argValue = $this->context->builder->call(
-                        $this->context->lookupFunction('__value__readString') ,
+                        $this->context->lookupFunction('__value__readString') , 
                         $argValue
-
+                        
                     );
-
+    
                             // Fall through intentional
                         case Variable::TYPE_STRING:
                             $fmt = $this->context->builder->pointerCast(
@@ -306,13 +305,13 @@ class JIT {
     $offset = $this->context->structFieldMap[$argValue->typeOf()->getElementType()->getName()]['value'];
                     $__str__value = $this->context->builder->structGep($argValue, $offset);
     $this->context->builder->call(
-                    $this->context->lookupFunction('printf') ,
+                    $this->context->lookupFunction('printf') , 
                     $fmt
                     , $__str__length
                     , $__str__value
-
+                    
                 );
-
+    
                             break;
                         case Variable::TYPE_NATIVE_LONG:
                             $fmt = $this->context->builder->pointerCast(
@@ -320,12 +319,12 @@ class JIT {
                         $this->context->getTypeFromString('char*')
                     );
     $this->context->builder->call(
-                    $this->context->lookupFunction('printf') ,
+                    $this->context->lookupFunction('printf') , 
                     $fmt
                     , $argValue
-
+                    
                 );
-
+    
                             break;
                         case Variable::TYPE_NATIVE_DOUBLE:
                             $fmt = $this->context->builder->pointerCast(
@@ -333,39 +332,39 @@ class JIT {
                         $this->context->getTypeFromString('char*')
                     );
     $this->context->builder->call(
-                    $this->context->lookupFunction('printf') ,
+                    $this->context->lookupFunction('printf') , 
                     $fmt
                     , $argValue
-
+                    
                 );
-
+    
                             break;
                         case Variable::TYPE_NATIVE_BOOL:
                             $bool = $this->context->castToBool($argValue);
                 $prev = $this->context->builder->getInsertBlock();
                 $ifBlock = $prev->insertBasicBlock('ifBlock');
                 $prev->moveBefore($ifBlock);
-
+                
                 $endBlock[] = $tmp = $ifBlock->insertBasicBlock('endBlock');
                     $this->context->builder->branchIf($bool, $ifBlock, $tmp);
-
+                
                 $this->context->builder->positionAtEnd($ifBlock);
                 { $fmt = $this->context->builder->pointerCast(
                         $this->context->constantFromString("1"),
                         $this->context->getTypeFromString('char*')
                     );
     $this->context->builder->call(
-                    $this->context->lookupFunction('printf') ,
+                    $this->context->lookupFunction('printf') , 
                     $fmt
-
+                    
                 );
     }
                 if ($this->context->builder->getInsertBlock()->getTerminator() === null) {
                     $this->context->builder->branch(end($endBlock));
                 }
-
+                
                 $this->context->builder->positionAtEnd(array_pop($endBlock));
-
+    
                             break;
 
                         default:
@@ -433,7 +432,7 @@ class JIT {
                 case OpCode::TYPE_RETURN_VOID:
                     $this->context->freeDeadVariables($func, $basicBlock, $block);
                     $this->context->builder->returnVoid();
-
+    
                     return $origBasicBlock;
                 case OpCode::TYPE_RETURN:
                     $return = $this->context->getVariableFromOp($block->getOperand($op->arg1));
@@ -441,7 +440,7 @@ class JIT {
                     $retval = $this->context->helper->loadValue($return);
                     $this->context->freeDeadVariables($func, $basicBlock, $block);
                     $this->context->builder->returnValue($retval);
-
+    
                     return $origBasicBlock;
                 case OpCode::TYPE_FUNCDEF:
                     $nameOp = $block->getOperand($op->arg1);
@@ -563,29 +562,29 @@ class JIT {
             switch ($value->type) {
                 case Variable::TYPE_NULL:
                     $this->context->builder->call(
-                    $this->context->lookupFunction('__value__writeNull') ,
+                    $this->context->lookupFunction('__value__writeNull') , 
                     $valueRef
-
+                    
                 );
-
+    
                     return;
                 case Variable::TYPE_NATIVE_LONG:
                     $this->context->builder->call(
-                    $this->context->lookupFunction('__value__writeLong') ,
+                    $this->context->lookupFunction('__value__writeLong') , 
                     $valueRef
                     , $valueFrom
-
+                    
                 );
-
+    
                     return;
                 case Variable::TYPE_NATIVE_DOUBLE:
                     $this->context->builder->call(
-                    $this->context->lookupFunction('__value__writeDouble') ,
+                    $this->context->lookupFunction('__value__writeDouble') , 
                     $valueRef
                     , $valueFrom
-
+                    
                 );
-
+    
                     return;
                 default:
                     throw new \LogicException("Source type: {$value->type}");

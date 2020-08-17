@@ -209,6 +209,13 @@ class JIT {
                             $idx = $block->getOperand($op->arg3)->value;
                         }
 
+                        if (is_string($idx)) {
+                            // todo calculate hash here?
+                            $idx = ["foo" => 1, "bar" => 2, "baz" => 3][$idx];
+                            // todo insert elements into hash table here
+                            break;
+                        }
+
                         $arrayElement = $this->context->getVariableFromOp($block->getOperand($op->arg2));
 
                         $this->context->builder->store(
@@ -218,7 +225,7 @@ class JIT {
 
                         $result->nextFreeElement = max($result->nextFreeElement, $idx + 1);
                     } else {
-                        throw new \LogicException('Hash tables not implemented yet');
+//                        throw new \LogicException('Hash tables not implemented yet');
                     }
                     break;
                 case OpCode::TYPE_BOOLEAN_NOT:

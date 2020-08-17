@@ -61,9 +61,9 @@ final class Variable {
     public int $nextFreeElement = 0;
 
     public function __construct(
-        Context $context, 
-        int $type, 
-        int $kind, 
+        Context $context,
+        int $type,
+        int $kind,
         PHPLLVM\Value $value
     ) {
         $this->context = $context;
@@ -88,7 +88,8 @@ final class Variable {
 
     public static function getStringType(int $type): string {
         if (isset(self::NATIVE_TYPE_MAP[$type])) {
-            return self::NATIVE_TYPE_MAP[$type];
+            $ret = self::NATIVE_TYPE_MAP[$type];
+            return $ret;
         }
     }
 
@@ -114,7 +115,7 @@ final class Variable {
         PHPLLVM\BasicBlock $basicBlock,
         Block $block,
         Operand $op
-    ): Variable {
+    ): ?Variable {
         $type = self::getTypeFromType($op->type);
         $stringType = self::getStringType($type);
         if ($type === self::TYPE_HASHTABLE) {
@@ -125,6 +126,51 @@ final class Variable {
                     $origType = self::getTypeFromType($op->type->subTypes[0]);
                     $type = self::IS_NATIVE_ARRAY | $origType;
                     $stringType = self::getStringType($origType) . '[' . $size . ']';
+                } else {
+                    $builder = $context->builder;
+
+                    $origType = self::getTypeFromType($op->type->subTypes[0]);
+                    $type = self::IS_NATIVE_ARRAY | $origType;
+
+                    $size = 3;
+                    $stringType = "__htbucket__*[{$size}]";
+                    $elements = $builder->alloca($context->getTypeFromString($stringType));
+                    $hashIndexPointer = $builder->alloca($context->getTypeFromString('size_t'));
+
+                    $hashIndex = 0;
+                    $builder->store($context->getTypeFromString('size_t')->constInt($hashIndex, false), $hashIndexPointer);
+
+                    for ($i = 1; $i <= 2; $i++) {
+                        $struct = $context->memory->mallocWithExtra(
+                            $context->getTypeFromString('__htbucket__'),
+                            $context->getTypeFromString('size_t')->constInt(8, false)
+                        );
+                        $builder->store(
+                            $context->getTypeFromString('size_t')->constInt($i, false),
+                            $builder->structGep($struct, 1)
+                        );
+                        $builder->store(
+                            $context->getTypeFromString('size_t')->constInt($i*5, false),
+                            $builder->structGep($struct, 2)
+                        );
+                        $hashIndexValue = $builder->load($hashIndexPointer);
+                        $builder->store($struct, $builder->inBoundsGep(
+                            $elements,
+                            $context->getTypeFromString('size_t')->constInt(0, false),
+                            $hashIndexValue,
+                        ));
+                        $builder->store(
+                            $builder->add($hashIndexValue, $context->getTypeFromString('size_t')->constInt(1, false)),
+                            $hashIndexPointer
+                        );
+                    }
+
+                    return new Variable(
+                        $context,
+                        $type,
+                        self::KIND_VARIABLE,
+                        $elements
+                    );
                 }
             }
         }
@@ -196,14 +242,14 @@ final class Variable {
                         return $this;
                     case self::TYPE_NATIVE_DOUBLE:
                         return new self(
-                            $this->context, 
+                            $this->context,
                             $type,
                             self::KIND_VALUE,
                             $this->context->builder->siToFp($this->value, $this->context->getTypeFromString('double'))
                         );
                     case self::TYPE_NATIVE_BOOL:
                         return new self(
-                            $this->context, 
+                            $this->context,
                             $type,
                             self::KIND_VALUE,
                             $this->context->builder->trunc($this->value, $this->context->getTypeFromString('bool'))
@@ -216,14 +262,14 @@ final class Variable {
                         return $this;
                     case self::TYPE_NATIVE_DOUBLE:
                         return new self(
-                            $this->context, 
+                            $this->context,
                             $type,
                             self::KIND_VALUE,
                             $this->context->builder->siToFp($this->value, $this->context->getTypeFromString('double'))
                         );
                     case self::TYPE_NATIVE_LONG:
                         return new self(
-                            $this->context, 
+                            $this->context,
                             $type,
                             self::KIND_VALUE,
                             $this->context->builder->zEdt($this->value, $this->context->getTypeFromString('long long'))
@@ -236,14 +282,14 @@ final class Variable {
                         return $this;
                     case self::TYPE_NATIVE_LONG:
                         return new self(
-                            $this->context, 
+                            $this->context,
                             $type,
                             self::KIND_VALUE,
                             $this->context->builder->fpToSi($this->value, $this->context->getTypeFromString('long long'))
                         );
                     case self::TYPE_NATIVE_BOOL:
                         return new self(
-                            $this->context, 
+                            $this->context,
                             $type,
                             self::KIND_VALUE,
                             $this->context->builder->fpToSi($this->value, $this->context->getTypeFromString('bool'))
@@ -299,7 +345,7 @@ final class Variable {
                 break;
         }
     }
-    
+
     public function toString(\gcc_jit_block_ptr $block): Variable {
         switch ($this->type) {
             case self::TYPE_STRING:
@@ -322,11 +368,24 @@ final class Variable {
                     throw new \LogicException("Unsupported dim fetch on " . self::getStringType($this->type));
                 }
 
-                $value = $this->context->builder->inBoundsGep(
-                    $this->value,
-                    $this->context->constantFromInteger(0),
-                    $dim->value,
-                );
+                // string-indexed array
+                if ($dim->type === self::TYPE_STRING) {
+                    $fn = $this->context->lookupFunction('__hashtable__search');
+                    $ptr = $this->context->builder->call(
+                        $fn,
+                        $this->context->getTypeFromString('size_t')->constInt(1, false)
+                    );
+                    $value = $this->context->builder->structGep(
+                        $ptr,
+                        2,
+                    );
+                } else {
+                    $value = $this->context->builder->inBoundsGep(
+                        $this->value,
+                        $this->context->constantFromInteger(0),
+                        $dim->value,
+                    );
+                }
 
                 return new Variable(
                     $this->context,

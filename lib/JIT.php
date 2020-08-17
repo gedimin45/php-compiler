@@ -1,7 +1,7 @@
 <?php
 
-# This file is generated, changes you make will be lost.
-# Make your changes in /compiler/lib/JIT.pre instead.
+// This file is generated and changes you make will be lost.
+// Change /Users/ged15/Projects/php-compiler/lib/JIT.pre instead.
 
 /*
  * This file is part of PHP-Compiler, a PHP CFG Compiler for PHP code
@@ -154,7 +154,7 @@ class JIT {
         }
         return $func;
     }
-    
+
     private function compileBlockInternal(
         PHPLLVM\Value $func,
         Block $block,
@@ -204,7 +204,6 @@ class JIT {
                 case OpCode::TYPE_INIT_ARRAY:
                 case OpCode::TYPE_ADD_ARRAY_ELEMENT:
                     $result = $this->context->getVariableFromOp($block->getOperand($op->arg1));
-
                     if ($result->type & Variable::IS_NATIVE_ARRAY) {
                         if (is_null($op->arg3)) {
                             $idx = $result->nextFreeElement;
@@ -213,16 +212,24 @@ class JIT {
                             $idx = $block->getOperand($op->arg3)->value;
                         }
 
+                        if (is_string($idx)) {
+                            // todo calculate hash here?
+                            $idx = ["foo" => 1, "bar" => 2, "baz" => 3][$idx];
+                            // todo insert elements into hash table here
+                            break;
+                        }
+
                         $arrayElement = $this->context->getVariableFromOp($block->getOperand($op->arg2));
 
                         $this->context->builder->store(
                             $this->context->helper->loadValue($arrayElement),
-                            $this->context->builder->structGep($result->value, $idx)
+                            $this->context->builder->structGep($result->value, $idx),
                         );
 
                         $result->nextFreeElement = max($result->nextFreeElement, $idx + 1);
                     } else {
-                        throw new \LogicException('Hash tables not implemented yet');
+                        $result = $this->context->getVariableFromOp($block->getOperand($op->arg1));
+//                        throw new \LogicException('Hash tables not implemented yet');
                     }
                     break;
                 case OpCode::TYPE_BOOLEAN_NOT:
@@ -233,15 +240,15 @@ class JIT {
                         $value = $this->context->castToBool($this->context->helper->loadValue($from));
                     }
                     $__right = $value->typeOf()->constInt(1, false);
-                            
-                        
 
-                        
 
-                        
+
+
+
+
 
                         $result = $this->context->builder->bitwiseXor($value, $__right);
-    
+
 
                     $this->assignOperandValue($block->getOperand($op->arg1), $result);
                     break;
@@ -281,13 +288,13 @@ class JIT {
                     switch ($arg->type) {
                         case Variable::TYPE_VALUE:
                             $argValue = $this->context->builder->call(
-                        $this->context->lookupFunction('__value__readString') , 
+                        $this->context->lookupFunction('__value__readString') ,
                         $argValue
-                        
+
                     );
-    
-                            // Fall through intentional                
-                        case Variable::TYPE_STRING:            
+
+                            // Fall through intentional
+                        case Variable::TYPE_STRING:
                             $fmt = $this->context->builder->pointerCast(
                         $this->context->constantFromString("%.*s"),
                         $this->context->getTypeFromString('char*')
@@ -299,13 +306,13 @@ class JIT {
     $offset = $this->context->structFieldMap[$argValue->typeOf()->getElementType()->getName()]['value'];
                     $__str__value = $this->context->builder->structGep($argValue, $offset);
     $this->context->builder->call(
-                    $this->context->lookupFunction('printf') , 
+                    $this->context->lookupFunction('printf') ,
                     $fmt
                     , $__str__length
                     , $__str__value
-                    
+
                 );
-    
+
                             break;
                         case Variable::TYPE_NATIVE_LONG:
                             $fmt = $this->context->builder->pointerCast(
@@ -313,12 +320,12 @@ class JIT {
                         $this->context->getTypeFromString('char*')
                     );
     $this->context->builder->call(
-                    $this->context->lookupFunction('printf') , 
+                    $this->context->lookupFunction('printf') ,
                     $fmt
                     , $argValue
-                    
+
                 );
-    
+
                             break;
                         case Variable::TYPE_NATIVE_DOUBLE:
                             $fmt = $this->context->builder->pointerCast(
@@ -326,42 +333,42 @@ class JIT {
                         $this->context->getTypeFromString('char*')
                     );
     $this->context->builder->call(
-                    $this->context->lookupFunction('printf') , 
+                    $this->context->lookupFunction('printf') ,
                     $fmt
                     , $argValue
-                    
+
                 );
-    
+
                             break;
                         case Variable::TYPE_NATIVE_BOOL:
                             $bool = $this->context->castToBool($argValue);
                 $prev = $this->context->builder->getInsertBlock();
                 $ifBlock = $prev->insertBasicBlock('ifBlock');
                 $prev->moveBefore($ifBlock);
-                
+
                 $endBlock[] = $tmp = $ifBlock->insertBasicBlock('endBlock');
                     $this->context->builder->branchIf($bool, $ifBlock, $tmp);
-                
+
                 $this->context->builder->positionAtEnd($ifBlock);
                 { $fmt = $this->context->builder->pointerCast(
                         $this->context->constantFromString("1"),
                         $this->context->getTypeFromString('char*')
                     );
     $this->context->builder->call(
-                    $this->context->lookupFunction('printf') , 
+                    $this->context->lookupFunction('printf') ,
                     $fmt
-                    
+
                 );
     }
                 if ($this->context->builder->getInsertBlock()->getTerminator() === null) {
                     $this->context->builder->branch(end($endBlock));
                 }
-                
+
                 $this->context->builder->positionAtEnd(array_pop($endBlock));
-    
+
                             break;
 
-                        default: 
+                        default:
                             throw new \LogicException("Echo for type $arg->type not implemented");
                     }
                     if ($op->type === OpCode::TYPE_PRINT) {
@@ -426,7 +433,7 @@ class JIT {
                 case OpCode::TYPE_RETURN_VOID:
                     $this->context->freeDeadVariables($func, $basicBlock, $block);
                     $this->context->builder->returnVoid();
-    
+
                     return $origBasicBlock;
                 case OpCode::TYPE_RETURN:
                     $return = $this->context->getVariableFromOp($block->getOperand($op->arg1));
@@ -434,7 +441,7 @@ class JIT {
                     $retval = $this->context->helper->loadValue($return);
                     $this->context->freeDeadVariables($func, $basicBlock, $block);
                     $this->context->builder->returnValue($retval);
-    
+
                     return $origBasicBlock;
                 case OpCode::TYPE_FUNCDEF:
                     $nameOp = $block->getOperand($op->arg1);
@@ -520,7 +527,7 @@ class JIT {
                     var_dump($op);
                     throw new \LogicException('Other class body types are not jittable for now');
             }
-            
+
         }
     }
 
@@ -556,29 +563,29 @@ class JIT {
             switch ($value->type) {
                 case Variable::TYPE_NULL:
                     $this->context->builder->call(
-                    $this->context->lookupFunction('__value__writeNull') , 
+                    $this->context->lookupFunction('__value__writeNull') ,
                     $valueRef
-                    
+
                 );
-    
+
                     return;
                 case Variable::TYPE_NATIVE_LONG:
                     $this->context->builder->call(
-                    $this->context->lookupFunction('__value__writeLong') , 
+                    $this->context->lookupFunction('__value__writeLong') ,
                     $valueRef
                     , $valueFrom
-                    
+
                 );
-    
+
                     return;
                 case Variable::TYPE_NATIVE_DOUBLE:
                     $this->context->builder->call(
-                    $this->context->lookupFunction('__value__writeDouble') , 
+                    $this->context->lookupFunction('__value__writeDouble') ,
                     $valueRef
                     , $valueFrom
-                    
+
                 );
-    
+
                     return;
                 default:
                     throw new \LogicException("Source type: {$value->type}");

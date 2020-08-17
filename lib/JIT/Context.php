@@ -45,7 +45,7 @@ class Context {
     private array $builtins;
     private array $stringConstantMap = [];
     private array $modules = [];
-    
+
     private ?Result $result = null;
     public Builtin\MemoryManager $memory;
     public Builtin\Output $output;
@@ -89,7 +89,7 @@ class Context {
 
         $this->analyzer = new Analyzer;
         $this->helper = new Helper($this);
-        
+
         $this->refcount = new Builtin\Refcount($this, $loadType);
         $this->memory = Builtin\MemoryManager::load($this, $loadType);
         $this->output = new Builtin\Output($this, $loadType);
@@ -225,7 +225,7 @@ class Context {
         if (!is_null($this->debugFile)) {
             $this->module->printToFile($this->debugFile . '.bc');
         }
-        $this->module->verify($this->module::VERIFY_ACTION_THROW, $message);   
+        $this->module->verify($this->module::VERIFY_ACTION_THROW, $message);
     }
 
     public function setDebugFile(string $file): void {
@@ -497,7 +497,7 @@ class Context {
                     break;
                 default:
                     throw new \LogicException("Non-implemented constant fetch type: " . $phpVar->type);
-            }       
+            }
         }
         return new Variable(
             $this,

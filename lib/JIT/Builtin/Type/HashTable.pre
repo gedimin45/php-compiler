@@ -22,103 +22,22 @@ class HashTable extends Type {
     public PHPLLVM\Type $pointer;
 
     public function register(): void {
-
-
-
-
-        $struct___cfcd208495d565ef66e7dff9f98764da = $this->context->context->namedStructType('__hashtable__');
-            // declare first so recursive structs are possible :)
-            $this->context->registerType('__hashtable__', $struct___cfcd208495d565ef66e7dff9f98764da);
-            $this->context->registerType('__hashtable__' . '*', $struct___cfcd208495d565ef66e7dff9f98764da->pointerType(0));
-            $this->context->registerType('__hashtable__' . '**', $struct___cfcd208495d565ef66e7dff9f98764da->pointerType(0)->pointerType(0));
-            $struct___cfcd208495d565ef66e7dff9f98764da->setBody(
-                false ,  // packed
-                $this->context->getTypeFromString('__ref__')
-                , $this->context->getTypeFromString('size_t')
-
-            );
-            $this->context->structFieldMap['__hashtable__'] = [
-                'ref' => 0
-                , 'size' => 1
-
-            ];
-
-
-
-
-
-        $struct___cfcd208495d565ef66e7dff9f98764da = $this->context->context->namedStructType('__htbucket__');
-            // declare first so recursive structs are possible :)
-            $this->context->registerType('__htbucket__', $struct___cfcd208495d565ef66e7dff9f98764da);
-            $this->context->registerType('__htbucket__' . '*', $struct___cfcd208495d565ef66e7dff9f98764da->pointerType(0));
-            $this->context->registerType('__htbucket__' . '**', $struct___cfcd208495d565ef66e7dff9f98764da->pointerType(0)->pointerType(0));
-            $struct___cfcd208495d565ef66e7dff9f98764da->setBody(
-                false ,  // packed
-                $this->context->getTypeFromString('size_t')
-                , $this->context->getTypeFromString('size_t')
-                , $this->context->getTypeFromString('size_t')
-
-            );
-            $this->context->structFieldMap['__htbucket__'] = [
-                'hash' => 0
-                , 'key' => 1
-                , 'value' => 2
-
-            ];
-
-    $fntype___cfcd208495d565ef66e7dff9f98764da = $this->context->context->functionType(
-                $this->context->getTypeFromString('__htbucket__*'),
-                false
-//                , $this->context->getTypeFromString('__hashtable__*')
-                , $this->context->getTypeFromString('size_t')
-
-            );
-            $fn___cfcd208495d565ef66e7dff9f98764da = $this->context->module->addFunction('__hashtable__search', $fntype___cfcd208495d565ef66e7dff9f98764da);
-
-
-
-
-            $this->context->registerFunction('__hashtable__search', $fn___cfcd208495d565ef66e7dff9f98764da);
-
-
-
-
-
-
-        $this->pointer = $this->context->getTypeFromString('__hashtable__*');
+        declare {
+            struct __hashtable__ {
+                __ref__ $ref;
+            }
+            struct __htbucket__ {
+                size_t $hash;
+                size_t $key;
+                size_t $value;
+            }
+            static function __hashtable__search(size_t): __htbucket__*;
+        }
     }
 
     public function implement(): void
     {
         $this->implementSearch();
-    }
-
-    private function implementAlloc(): void {
-        compile {
-            function __hashtable__alloc($size) {
-                $allocSize = $size + 1;
-                $struct = malloc __string__ $size;
-                $struct->length = $size;
-                $char = &$struct->value;
-                memset $char 0 $allocSize;
-                $ref = (__ref__virtual*) $struct;
-                $typeinfo = (int32) Refcount::TYPE_INFO_TYPE_STRING | Refcount::TYPE_INFO_REFCOUNTED;
-                __ref__init($typeinfo, $ref);
-                return $struct;
-            }
-        }
-    }
-
-    private function implementInit()
-    {
-        compile {
-            function __hashtable__init($size, $value) {
-                $result = __hashtable__alloc($size);
-                $char = &$result->value;
-                memcpy $char $value $size;
-                    return $result;
-            }
-        }
     }
 
     private function implementSearch()
@@ -156,34 +75,36 @@ class HashTable extends Type {
 
         $sizeTType = $this->context->getTypeFromString('size_t');
 
-        $type = $this->context->getTypeFromString('__htbucket__[3]');
+        $type = $this->context->getTypeFromString('__htbucket__*[3]');
         $elementsPointer = $builder->alloca($type);
         // todo store into $elements
         $indexPointer = $builder->alloca($sizeTType);
         $builder->store($sizeTType->constInt(0, false), $indexPointer);
-        $currentElementPointer = $builder->alloca($this->context->getTypeFromString('__htbucket__'));
         $elementToReturnPointer = $builder->alloca(
             $this->context->getTypeFromString('__htbucket__*')
         );
         $builder->branch($loopBlock);
 
         $builder->positionAtEnd($loopBlock);
-
-//        debug($this->context, "loop block");
         $index = $builder->load($indexPointer);
         $elementPointer = $builder->inBoundsGep($elementsPointer, $sizeTType->constInt(0, false), $index);
         $element = $builder->load($elementPointer);
-        $builder->store($element, $currentElementPointer);
-        $comparisonResult = $builder->iCmp(\PHPLLVM\Builder::INT_EQ, $elementPointer, $elementPointer->typeOf()->constNull());
+        $comparisonResult = $builder->iCmp(\PHPLLVM\Builder::INT_EQ, $element, $element->typeOf()->constNull());
         $builder->branchIf($comparisonResult, $returnNullBlock, $iterateBlock);
 
         $builder->positionAtEnd($iterateBlock);
-        $elementKey = $builder->load($builder->structGep($currentElementPointer, 1));
+        $index = $builder->load($indexPointer);
+        $currentElementPointer = $builder->inBoundsGep($elementsPointer, $sizeTType->constInt(0, false), $index);
+        $currentElement = $builder->load($currentElementPointer);
+        $elementKey = $builder->load($builder->structGep($currentElement, 1));
         $comparisonResult = $builder->iCmp(\PHPLLVM\Builder::INT_EQ, $elementKey, $key);
         $builder->branchIf($comparisonResult, $returnElementBlock, $nextCellBlock);
 
         $builder->positionAtEnd($returnElementBlock);
-        $builder->store($currentElementPointer, $elementToReturnPointer);
+        $index = $builder->load($indexPointer);
+        $currentElementPointer = $builder->inBoundsGep($elementsPointer, $sizeTType->constInt(0, false), $index);
+        $currentElement = $builder->load($currentElementPointer);
+        $builder->store($currentElement, $elementToReturnPointer);
         $builder->branch($returnBlock);
 
         $builder->positionAtEnd($returnNullBlock);
@@ -196,35 +117,14 @@ class HashTable extends Type {
 
         $builder->positionAtEnd($nextCellBlock);
         $index = $builder->load($indexPointer);
-        $builder->store(
-            $builder->add($index, $sizeTType->constInt(1, false)),
-            $indexPointer,
-        );
-        // todo wrap around the table
+        $incrementedIndex = $builder->add($index, $sizeTType->constInt(1, false));
+        $wrappedIndex = $builder->unsigendRem($incrementedIndex, $sizeTType->constInt(3, false));
+        $builder->store($wrappedIndex, $indexPointer);
         $builder->branch($loopBlock);
 
         $builder->clearInsertionPosition();
     }
 
     public function initialize(): void {
-    }
-
-    public function init(
-        PHPLLVM\Value $dest,
-        array $values
-    ): void {
-//        compile {
-//            function __hashmap_init($size) {
-//                $elemOne = malloc __htbucket__ $size;
-//                $elemOne->key = 1;
-//                $elemOne->data = 20;
-//
-//                $elemTwo = malloc __htbucket__ $size;
-//                $elemTwo->key = 69;
-//                $elemTwo->data = 55;
-//
-//                return $array;
-//            }
-//        }
     }
 }

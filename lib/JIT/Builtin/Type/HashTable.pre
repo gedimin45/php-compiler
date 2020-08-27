@@ -23,21 +23,126 @@ class HashTable extends Type {
 
     public function register(): void {
         declare {
-            struct __hashtable__ {
-                __ref__ $ref;
-            }
             struct __htbucket__ {
                 size_t $hash;
                 size_t $key;
                 size_t $value;
             }
+            struct __hashtable__ {
+                __ref__ $ref;
+                __htbucket__** $buckets;
+            }
+            static function __hashtable__insert(__hashtable__*, size_t, size_t): void;
             static function __hashtable__search(size_t): __htbucket__*;
         }
     }
 
     public function implement(): void
     {
+        $this->implementInsert();
         $this->implementSearch();
+    }
+
+    private function implementInsert()
+    {
+        $context = $this->context;
+        $builder = $context->builder;
+
+        $function = $this->context->lookupFunction('__hashtable__insert');
+
+        $mainBlock = $function->appendBasicBlock('main');
+        $this->context->builder->positionAtEnd($mainBlock);
+
+        $prev = $this->context->builder->getInsertBlock();
+
+        $loopBlock = $prev->insertBasicBlock('loop');
+        $prev->moveBefore($loopBlock);
+
+        $iterateBlock = $prev->insertBasicBlock('iterate');
+        $prev->moveBefore($iterateBlock);
+
+        $insertBlock = $prev->insertBasicBlock('insert');
+        $prev->moveBefore($insertBlock);
+
+        $hashtable = $function->getParam(0);
+        $index = $function->getParam(1);
+        $value = $function->getParam(2);
+
+        $htbuckets = $this->context->builder->structGep(
+            $hashtable,
+            $context->structFieldMap[$hashtable->typeOf()->getElementType()->getName()]['buckets'],
+        );
+
+        $htbucketType = $this->context->getTypeFromString('__htbucket__');
+        $struct = $this->context->memory->mallocWithExtra($htbucketType, $index);
+        $this->context->builder->store(
+            $index,
+            $this->context->builder->structGep(
+                $struct,
+                $this->context->structFieldMap[$struct->typeOf()->getElementType()->getName()]['key']
+            )
+        );
+        $this->context->builder->store(
+            $value,
+            $this->context->builder->structGep(
+                $struct,
+                $this->context->structFieldMap[$struct->typeOf()->getElementType()->getName()]['value']
+            )
+        );
+
+        $sizeTType = $this->context->getTypeFromString('size_t');
+
+        $elementsPointer = $builder->alloca($htbuckets->typeOf());
+        $indexPointer = $builder->alloca($sizeTType);
+        $builder->store($index, $indexPointer);
+
+        $builder->positionAtEnd($loopBlock);
+        $index = $builder->load($indexPointer);
+        $elementPointer = $builder->inBoundsGep($elementsPointer, $sizeTType->constInt(0, false), $index);
+        $element = $builder->load($elementPointer);
+        $comparisonResult = $builder->iCmp(\PHPLLVM\Builder::INT_EQ, $element, $element->typeOf()->constNull());
+        $builder->branchIf($comparisonResult, $insertBlock, $iterateBlock);
+
+        $builder->positionAtEnd($iterateBlock);
+        $index = $builder->load($indexPointer);
+        $incrementedIndex = $builder->add($index, $sizeTType->constInt(1, false));
+        $wrappedIndex = $builder->unsigendRem($incrementedIndex, $sizeTType->constInt(3, false)); // todo use actual hashtable size
+        $builder->store($wrappedIndex, $indexPointer);
+        $builder->branch($loopBlock);
+
+        $builder->positionAtEnd($insertBlock);
+        $index = $builder->load($indexPointer);
+        $builder->store($struct, $builder->inBoundsGep(
+            $htbuckets,
+            $context->getTypeFromString('size_t')->constInt(0, false),
+            $index,
+        ));
+
+
+
+
+//        while(hashArray[hashIndex] != NULL) {
+//            //go to next cell
+//            ++hashIndex;
+//
+//            //wrap around the table
+//            hashIndex %= SIZE;
+//        }
+//
+//        hashArray[hashIndex] = item;
+
+////                $hashIndexValue = $builder->load($hashIndexPointer);
+//        $builder->store($struct, $builder->inBoundsGep(
+//            $htbuckets,
+//            $context->getTypeFromString('size_t')->constInt(0, false),
+//            $hashIndexValue,
+//        ));
+//                $builder->store(
+//                    $builder->add($hashIndexValue, $context->getTypeFromString('size_t')->constInt(1, false)),
+//                    $hashIndexPointer
+//                );
+
+        $this->context->builder->clearInsertionPosition();
     }
 
     private function implementSearch()

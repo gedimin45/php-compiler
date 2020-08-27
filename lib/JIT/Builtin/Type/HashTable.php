@@ -1,7 +1,7 @@
 <?php
 
 // This file is generated and changes you make will be lost.
-// Change /Users/ged15/Projects/php-compiler/lib/JIT/Builtin/Type/HashTable.pre instead.
+// Change /compiler/lib/JIT/Builtin/Type/HashTable.pre instead.
 
 // This file is generated and changes you make will be lost.
 // Change /compiler/lib/JIT/Builtin/Type/HashTable.pre instead.
@@ -25,28 +25,9 @@ class HashTable extends Type {
     public PHPLLVM\Type $pointer;
 
     public function register(): void {
-        
 
-        
 
-        $struct___cfcd208495d565ef66e7dff9f98764da = $this->context->context->namedStructType('__hashtable__');
-            // declare first so recursive structs are possible :)
-            $this->context->registerType('__hashtable__', $struct___cfcd208495d565ef66e7dff9f98764da);
-            $this->context->registerType('__hashtable__' . '*', $struct___cfcd208495d565ef66e7dff9f98764da->pointerType(0));
-            $this->context->registerType('__hashtable__' . '**', $struct___cfcd208495d565ef66e7dff9f98764da->pointerType(0)->pointerType(0));
-            $struct___cfcd208495d565ef66e7dff9f98764da->setBody(
-                false ,  // packed
-                $this->context->getTypeFromString('__ref__')
-                
-            );
-            $this->context->structFieldMap['__hashtable__'] = [
-                'ref' => 0
-                
-            ];
-        
-    
 
-        
 
         $struct___cfcd208495d565ef66e7dff9f98764da = $this->context->context->namedStructType('__htbucket__');
             // declare first so recursive structs are possible :)
@@ -58,37 +39,222 @@ class HashTable extends Type {
                 $this->context->getTypeFromString('size_t')
                 , $this->context->getTypeFromString('size_t')
                 , $this->context->getTypeFromString('size_t')
-                
+
             );
             $this->context->structFieldMap['__htbucket__'] = [
                 'hash' => 0
                 , 'key' => 1
                 , 'value' => 2
-                
+
             ];
-        
+
+
+
+
+
+        $struct___cfcd208495d565ef66e7dff9f98764da = $this->context->context->namedStructType('__hashtable__');
+            // declare first so recursive structs are possible :)
+            $this->context->registerType('__hashtable__', $struct___cfcd208495d565ef66e7dff9f98764da);
+            $this->context->registerType('__hashtable__' . '*', $struct___cfcd208495d565ef66e7dff9f98764da->pointerType(0));
+            $this->context->registerType('__hashtable__' . '**', $struct___cfcd208495d565ef66e7dff9f98764da->pointerType(0)->pointerType(0));
+            $struct___cfcd208495d565ef66e7dff9f98764da->setBody(
+                false ,  // packed
+                $this->context->getTypeFromString('__ref__')
+                , $this->context->getTypeFromString('__htbucket__**')
+
+            );
+            $this->context->structFieldMap['__hashtable__'] = [
+                'ref' => 0
+                , 'buckets' => 1
+
+            ];
+
+    $fntype___cfcd208495d565ef66e7dff9f98764da = $this->context->context->functionType(
+                $this->context->getTypeFromString('void'),
+                false ,
+                $this->context->getTypeFromString('__hashtable__*')
+                , $this->context->getTypeFromString('size_t')
+                , $this->context->getTypeFromString('size_t')
+
+            );
+            $fn___cfcd208495d565ef66e7dff9f98764da = $this->context->module->addFunction('__hashtable__insert', $fntype___cfcd208495d565ef66e7dff9f98764da);
+
+
+
+
+
+            $this->context->registerFunction('__hashtable__insert', $fn___cfcd208495d565ef66e7dff9f98764da);
+
+
+
+
+
     $fntype___cfcd208495d565ef66e7dff9f98764da = $this->context->context->functionType(
                 $this->context->getTypeFromString('__htbucket__*'),
-                false , 
+                false ,
                 $this->context->getTypeFromString('size_t')
-                
+
             );
             $fn___cfcd208495d565ef66e7dff9f98764da = $this->context->module->addFunction('__hashtable__search', $fntype___cfcd208495d565ef66e7dff9f98764da);
-            
-            
-            
+
+
+
             $this->context->registerFunction('__hashtable__search', $fn___cfcd208495d565ef66e7dff9f98764da);
-        
 
-        
 
-        
-    
+
+
+
+
     }
 
     public function implement(): void
     {
+        $this->implementInsert();
         $this->implementSearch();
+    }
+
+    private function implementInsert()
+    {
+        $context = $this->context;
+        $builder = $context->builder;
+
+        $function = $this->context->lookupFunction('__hashtable__insert');
+
+        $mainBlock = $function->appendBasicBlock('main');
+        $this->context->builder->positionAtEnd($mainBlock);
+
+        $prev = $this->context->builder->getInsertBlock();
+
+        $loopBlock = $prev->insertBasicBlock('loop');
+        $prev->moveBefore($loopBlock);
+
+        $iterateBlock = $prev->insertBasicBlock('iterate');
+        $prev->moveBefore($iterateBlock);
+
+        $insertBlock = $prev->insertBasicBlock('insert');
+        $prev->moveBefore($insertBlock);
+
+        $returnBlock = $prev->insertBasicBlock('return');
+        $prev->moveBefore($returnBlock);
+
+        $hashtable = $function->getParam(0);
+        $index = $function->getParam(1);
+        $value = $function->getParam(2);
+
+        debug($context, "about to gep");
+
+        $htbuckets = $this->context->builder->structGep(
+            $hashtable,
+            $context->structFieldMap[$hashtable->typeOf()->getElementType()->getName()]['buckets'],
+        );
+
+        $htbucketType = $this->context->getTypeFromString('__htbucket__');
+
+        debug($context, "about to alloca");
+
+        $htbucketPointer = $builder->alloca(
+            $this->context->getTypeFromString('__htbucket__*')
+        );
+
+        debug($context, "about to malloc");
+
+        $htbucket = $this->context->memory->mallocWithExtra($htbucketType, $index);
+
+        debug($context, "about to store");
+        $this->context->builder->store(
+            $index,
+            $this->context->builder->structGep(
+                $htbucket,
+                $this->context->structFieldMap[$htbucket->typeOf()->getElementType()->getName()]['key']
+            )
+        );
+        $this->context->builder->store(
+            $value,
+            $this->context->builder->structGep(
+                $htbucket,
+                $this->context->structFieldMap[$htbucket->typeOf()->getElementType()->getName()]['value']
+            )
+        );
+        $builder->store($htbucket, $htbucketPointer);
+
+        $sizeTType = $this->context->getTypeFromString('size_t');
+
+//        $elementsPointer = $builder->alloca($htbuckets->typeOf());
+        $indexPointer = $builder->alloca($sizeTType);
+        $builder->store($index, $indexPointer);
+        $builder->branch($loopBlock);
+
+        $builder->positionAtEnd($loopBlock);
+
+        debug($context, "about to loop", $index);
+        $htbucketsPtr = $builder->structGep(
+            $hashtable,
+            $context->structFieldMap[$hashtable->typeOf()->getElementType()->getName()]['buckets'],
+        );
+        $index = $builder->load($indexPointer);
+
+        debug($context, "about to load htbucketsPtr");
+        $htbucketsPtr = $builder->load($htbucketsPtr);
+
+        $element = $builder->inBoundsGep($htbucketsPtr, $index);
+
+        debug($context, "about to load element");
+        $element = $builder->load($element);
+
+//        $elementPointer = $builder->load($elementPointer);
+        debug($context, "about to compare");
+        $comparisonResult = $builder->iCmp(\PHPLLVM\Builder::INT_EQ, $element, $element->typeOf()->constNull());
+        $builder->branchIf($comparisonResult, $insertBlock, $iterateBlock);
+
+        $builder->positionAtEnd($iterateBlock);
+        debug($context, "about to iterate");
+        $index = $builder->load($indexPointer);
+        $incrementedIndex = $builder->add($index, $sizeTType->constInt(1, false));
+        $wrappedIndex = $builder->unsigendRem($incrementedIndex, $sizeTType->constInt(3, false)); // todo use actual hashtable size
+        $builder->store($wrappedIndex, $indexPointer);
+        $builder->branch($loopBlock);
+
+        $builder->positionAtEnd($insertBlock);
+        debug($context, "about to insert");
+        $htbucketsPtr = $builder->structGep(
+            $hashtable,
+            $context->structFieldMap[$hashtable->typeOf()->getElementType()->getName()]['buckets'],
+        );
+        $htbuckets = $builder->load($htbucketsPtr);
+        $targetHtbucketPtr = $builder->inBoundsGep($htbuckets, $builder->load($indexPointer));
+        $builder->store($builder->load($htbucketPointer), $targetHtbucketPtr);
+        $builder->branch($returnBlock);
+
+        $builder->positionAtEnd($returnBlock);
+        debug($context, "about to return");
+        $builder->returnVoid();
+
+
+
+
+//        while(hashArray[hashIndex] != NULL) {
+//            //go to next cell
+//            ++hashIndex;
+//
+//            //wrap around the table
+//            hashIndex %= SIZE;
+//        }
+//
+//        hashArray[hashIndex] = item;
+
+////                $hashIndexValue = $builder->load($hashIndexPointer);
+//        $builder->store($struct, $builder->inBoundsGep(
+//            $htbuckets,
+//            $context->getTypeFromString('size_t')->constInt(0, false),
+//            $hashIndexValue,
+//        ));
+//                $builder->store(
+//                    $builder->add($hashIndexValue, $context->getTypeFromString('size_t')->constInt(1, false)),
+//                    $hashIndexPointer
+//                );
+
+        $this->context->builder->clearInsertionPosition();
     }
 
     private function implementSearch()

@@ -15,6 +15,7 @@ use PHPTypes\Type;
 use PHPCompiler\VM\Variable as VMVariable;
 
 use PHPLLVM;
+use function PHPCompiler\debug;
 
 final class Variable {
     const TYPE_NULL = 0;
@@ -137,43 +138,103 @@ final class Variable {
                     $origType = self::getTypeFromType($op->type->subTypes[0]);
                     $type = self::IS_NATIVE_ARRAY | $origType;
 
-                    $stringType = "__htbucket__*[{$size}]";
-                    $elements = $builder->alloca($context->getTypeFromString($stringType));
-                    $hashIndexPointer = $builder->alloca($context->getTypeFromString('size_t'));
 
-                    $hashIndex = 0;
-                    $builder->store($context->getTypeFromString('size_t')->constInt($hashIndex, false), $hashIndexPointer);
+
+                    debug($context, "about to alloca hashtable");
+                    $hashtable = $builder->alloca($context->getTypeFromString('__hashtable__'));
+
+                    debug($context, "about to alloca htbucket array");
+                    $mallocFn = $context->lookupFunction('malloc');
+                    $bucketAllocation = $context->builder->call(
+                        $mallocFn,
+                        $context->getTypeFromString('size_t')->constInt($size * 8, false),
+                    );
+//                    bitcast i8* %17 to %struct.Ht_item**
+                    $bucketAllocation = $builder->bitCast($bucketAllocation, $context->getTypeFromString("__htbucket__**"));
+                    $bucketsPtr = $builder->structGep(
+                        $hashtable,
+                        $context->structFieldMap[$hashtable->typeOf()->getElementType()->getName()]['buckets'],
+                    );
+                    $builder->store($bucketAllocation, $bucketsPtr);
+//                    $builder->inBoundsGep();
+//
+//                    $htbucket = $context->memory->mallocWithExtra($htbucketType, $index);
+//
+//                    $buckets = $builder->alloca($context->getTypeFromString("__htbucket__*[{$size}]"));
+//
+//                    $context->builder->store(
+//                        $buckets,
+//                        $context->builder->structGep(
+//                            $hashtable,
+//                            $context->structFieldMap[$hashtable->typeOf()->getElementType()->getName()]['buckets']
+//                        )
+//                    );
+
+                    $function = $context->lookupFunction('__hashtable__insert');
+
+//                    $builder->store(
+//                        $buckets,
+//                        $context->builder->structGep(
+//                            $hashtable,
+//                            $context->structFieldMap[$hashtable->typeOf()->getElementType()->getName()]['buckets'],
+//                        ),
+//                    );
+
+//                    $hashIndexPointer = $builder->alloca($context->getTypeFromString('size_t'));
+//
+//                    $hashIndex = 0;
+//                    $builder->store($context->getTypeFromString('size_t')->constInt($hashIndex, false), $hashIndexPointer);
+//
+                    $builder->call(
+                        $function,
+                        $hashtable,
+                        $context->getTypeFromString('size_t')->constInt(0, false),
+                        $context->getTypeFromString('size_t')->constInt(5, false),
+                    );
+//                    $builder->call(
+//                        $function,
+//                        $hashtable,
+//                        $context->getTypeFromString('size_t')->constInt(1, false),
+//                        $context->getTypeFromString('size_t')->constInt(4, false),
+//                    );
+//                    $builder->call(
+//                        $function,
+//                        $hashtable,
+//                        $context->getTypeFromString('size_t')->constInt(2, false),
+//                        $context->getTypeFromString('size_t')->constInt(9, false),
+//                    );
 
                     for ($i = 1; $i <= 2; $i++) {
-                        $struct = $context->memory->mallocWithExtra(
-                            $context->getTypeFromString('__htbucket__'),
-                            $context->getTypeFromString('size_t')->constInt(8, false)
-                        );
-                        $builder->store(
-                            $context->getTypeFromString('size_t')->constInt($i, false),
-                            $builder->structGep($struct, 1)
-                        );
-                        $builder->store(
-                            $context->getTypeFromString('size_t')->constInt($i*5, false),
-                            $builder->structGep($struct, 2)
-                        );
-                        $hashIndexValue = $builder->load($hashIndexPointer);
-                        $builder->store($struct, $builder->inBoundsGep(
-                            $elements,
-                            $context->getTypeFromString('size_t')->constInt(0, false),
-                            $hashIndexValue,
-                        ));
-                        $builder->store(
-                            $builder->add($hashIndexValue, $context->getTypeFromString('size_t')->constInt(1, false)),
-                            $hashIndexPointer
-                        );
+
+//                        $struct = $context->memory->mallocWithExtra(
+//                            $context->getTypeFromString('__htbucket__'),
+//                            $context->getTypeFromString('size_t')->constInt(8, false)
+//                        );
+//                        $builder->store(
+//                            $context->getTypeFromString('size_t')->constInt($i, false),
+//                            $builder->structGep($struct, 1)
+//                        );
+//                        $builder->store(
+//                            $context->getTypeFromString('size_t')->constInt($i*5, false),
+//                            $builder->structGep($struct, 2)
+//                        );
+//                        $hashIndexValue = $builder->load($hashIndexPointer);
+//                        $builder->store($struct, $builder->inBoundsGep(
+//                            $elements,
+//                            $context->getTypeFromString('size_t')->constInt(0, false),
+//                            $hashIndexValue,
+//                        ));
+//                        $builder->store(
+//                            $builder->add($hashIndexValue, $context->getTypeFromString('size_t')->constInt(1, false)),
+//                            $hashIndexPointer
+//                        );
                     }
 
                     return new Variable(
                         $context,
                         $type,
                         self::KIND_VARIABLE,
-                        $elements
+                        $hashtable
                     );
                 }
             }

@@ -1,7 +1,7 @@
 <?php
 
 // This file is generated and changes you make will be lost.
-// Change /compiler/lib/JIT/Builtin/Type/HashTable.pre instead.
+// Change /Users/ged15/Projects/php-compiler/lib/JIT/Builtin/Type/HashTable.pre instead.
 
 // This file is generated and changes you make will be lost.
 // Change /compiler/lib/JIT/Builtin/Type/HashTable.pre instead.
@@ -25,9 +25,9 @@ class HashTable extends Type {
     public PHPLLVM\Type $pointer;
 
     public function register(): void {
+        
 
-
-
+        
 
         $struct___cfcd208495d565ef66e7dff9f98764da = $this->context->context->namedStructType('__htbucket__');
             // declare first so recursive structs are possible :)
@@ -39,18 +39,18 @@ class HashTable extends Type {
                 $this->context->getTypeFromString('size_t')
                 , $this->context->getTypeFromString('size_t')
                 , $this->context->getTypeFromString('size_t')
-
+                
             );
             $this->context->structFieldMap['__htbucket__'] = [
                 'hash' => 0
                 , 'key' => 1
                 , 'value' => 2
-
+                
             ];
+        
+    
 
-
-
-
+        
 
         $struct___cfcd208495d565ef66e7dff9f98764da = $this->context->context->namedStructType('__hashtable__');
             // declare first so recursive structs are possible :)
@@ -61,51 +61,51 @@ class HashTable extends Type {
                 false ,  // packed
                 $this->context->getTypeFromString('__ref__')
                 , $this->context->getTypeFromString('__htbucket__**')
-
+                
             );
             $this->context->structFieldMap['__hashtable__'] = [
                 'ref' => 0
                 , 'buckets' => 1
-
+                
             ];
-
+        
     $fntype___cfcd208495d565ef66e7dff9f98764da = $this->context->context->functionType(
                 $this->context->getTypeFromString('void'),
-                false ,
+                false , 
                 $this->context->getTypeFromString('__hashtable__*')
                 , $this->context->getTypeFromString('size_t')
                 , $this->context->getTypeFromString('size_t')
-
+                
             );
             $fn___cfcd208495d565ef66e7dff9f98764da = $this->context->module->addFunction('__hashtable__insert', $fntype___cfcd208495d565ef66e7dff9f98764da);
-
-
-
-
-
+            
+            
+            
+            
+            
             $this->context->registerFunction('__hashtable__insert', $fn___cfcd208495d565ef66e7dff9f98764da);
+        
 
+        
 
-
-
-
+        
     $fntype___cfcd208495d565ef66e7dff9f98764da = $this->context->context->functionType(
                 $this->context->getTypeFromString('__htbucket__*'),
-                false ,
+                false , 
                 $this->context->getTypeFromString('size_t')
-
+                
             );
             $fn___cfcd208495d565ef66e7dff9f98764da = $this->context->module->addFunction('__hashtable__search', $fntype___cfcd208495d565ef66e7dff9f98764da);
-
-
-
+            
+            
+            
             $this->context->registerFunction('__hashtable__search', $fn___cfcd208495d565ef66e7dff9f98764da);
+        
 
+        
 
-
-
-
-
+        
+    
     }
 
     public function implement(): void
@@ -116,6 +116,101 @@ class HashTable extends Type {
 
     private function implementInsert()
     {
+        $fn___c4ca4238a0b923820dcc509a6f75849b = $this->context->lookupFunction('__hashtable__insert');
+    $block___c4ca4238a0b923820dcc509a6f75849b = $fn___c4ca4238a0b923820dcc509a6f75849b->appendBasicBlock('main');
+    $this->context->builder->positionAtEnd($block___c4ca4238a0b923820dcc509a6f75849b);
+    $hashtable = $fn___c4ca4238a0b923820dcc509a6f75849b->getParam(0);
+    $index = $fn___c4ca4238a0b923820dcc509a6f75849b->getParam(1);
+    $value = $fn___c4ca4238a0b923820dcc509a6f75849b->getParam(2);
+    
+    $offset = $this->context->structFieldMap[$hashtable->typeOf()->getElementType()->getName()]['buckets'];
+                    $htbuckets = $this->context->builder->structGep($hashtable, $offset);
+    $type = $this->context->getTypeFromString('__htbucket__');
+                    $struct = $this->context->memory->mallocWithExtra($type, $index);
+    $offset = $this->context->structFieldMap[$struct->typeOf()->getElementType()->getName()]['key'];
+                    $keyPtr = $this->context->builder->structGep($struct, $offset);
+    $this->context->builder->store($index, $keyPtr);
+    $offset = $this->context->structFieldMap[$struct->typeOf()->getElementType()->getName()]['value'];
+                    $valuePtr = $this->context->builder->structGep($struct, $offset);
+    $this->context->builder->store($value, $valuePtr);
+    $type = $this->context->getTypeFromString('__htbucket__');
+                    $currentItem = $this->context->builder->alloca($type);
+    $currentItemPtr = $this->context->builder->load($this->context->builder->gep(
+                        $htbuckets,
+                        //$this->context->context->int32Type()->constInt(0, false),
+                        //$this->context->context->int32Type()->constInt(0, false),
+                        $index
+                    ));
+    $this->context->builder->store($currentItemPtr, $currentItem);
+    $type = $this->context->getTypeFromString('size_t');
+                    $currentItemIndexPtr = $this->context->builder->alloca($type);
+    $this->context->builder->store($currentItemIndexPtr, $index);
+    $prev = $this->context->builder->getInsertBlock();
+
+                $loopBlock = $prev->insertBasicBlock('loopBlock');
+                $prev->moveBefore($loopBlock);
+
+                $iterateBlock = $prev->insertBasicBlock('iterateBlock');
+                $prev->moveBefore($iterateBlock);
+
+                $afterLoopBlock = $iterateBlock->insertBasicBlock('afterLoopBlock');
+                $prev->moveBefore($afterLoopBlock);
+
+                $this->context->builder->branch($loopBlock);
+
+                $this->context->builder->positionAtEnd($loopBlock);
+                $bool = $this->context->builder->icmp(\PHPLLVM\Builder::INT_EQ, $currentItem, $currentItem->typeOf()->constNull());
+    
+                $this->context->builder->branchIf($bool, $iterateBlock, $afterLoopBlock);
+
+                $this->context->builder->positionAtEnd($iterateBlock);
+                $currentItemIndex = $this->context->builder->load($currentItemIndexPtr);
+    $currentItemIndex = $this->context->builder->add($currentItemIndex, $currentItemIndex->typeOf()->constInt(1, false));
+    $__right = $currentItemIndex->typeOf()->constInt(20, false);
+                            
+                        
+
+                        
+
+                        
+
+                        
+
+                        
+
+                        
+
+                        
+
+                        
+
+                        
+                            $currentItemIndex = $this->context->builder->signedRem($currentItemIndex, $__right);
+    $currentItemPtr = $this->context->builder->load($this->context->builder->gep(
+                        $htbuckets,
+                        //$this->context->context->int32Type()->constInt(0, false),
+                        //$this->context->context->int32Type()->constInt(0, false),
+                        $index
+                    ));
+    $this->context->builder->store($currentItemPtr, $currentItem);
+    $this->context->builder->store($currentItemIndexPtr, $currentItemIndex);
+    
+                $this->context->builder->branch($loopBlock);
+
+                $this->context->builder->positionAtEnd($afterLoopBlock);
+    $currentItemIndex = $this->context->builder->load($currentItemIndexPtr);
+    $currentItemPtr = $this->context->builder->load($this->context->builder->gep(
+                        $htbuckets,
+                        //$this->context->context->int32Type()->constInt(0, false),
+                        //$this->context->context->int32Type()->constInt(0, false),
+                        $currentItemIndex
+                    ));
+    $this->context->builder->store($currentItemPtr, $struct);
+    $this->context->builder->returnVoid();
+    
+    $this->context->builder->clearInsertionPosition();
+
+        /*
         $context = $this->context;
         $builder = $context->builder;
 
@@ -135,14 +230,9 @@ class HashTable extends Type {
         $insertBlock = $prev->insertBasicBlock('insert');
         $prev->moveBefore($insertBlock);
 
-        $returnBlock = $prev->insertBasicBlock('return');
-        $prev->moveBefore($returnBlock);
-
         $hashtable = $function->getParam(0);
         $index = $function->getParam(1);
         $value = $function->getParam(2);
-
-        debug($context, "about to gep");
 
         $htbuckets = $this->context->builder->structGep(
             $hashtable,
@@ -150,65 +240,36 @@ class HashTable extends Type {
         );
 
         $htbucketType = $this->context->getTypeFromString('__htbucket__');
-
-        debug($context, "about to alloca");
-
-        $htbucketPointer = $builder->alloca(
-            $this->context->getTypeFromString('__htbucket__*')
-        );
-
-        debug($context, "about to malloc");
-
-        $htbucket = $this->context->memory->mallocWithExtra($htbucketType, $index);
-
-        debug($context, "about to store");
+        $struct = $this->context->memory->mallocWithExtra($htbucketType, $index);
         $this->context->builder->store(
             $index,
             $this->context->builder->structGep(
-                $htbucket,
-                $this->context->structFieldMap[$htbucket->typeOf()->getElementType()->getName()]['key']
+                $struct,
+                $this->context->structFieldMap[$struct->typeOf()->getElementType()->getName()]['key']
             )
         );
         $this->context->builder->store(
             $value,
             $this->context->builder->structGep(
-                $htbucket,
-                $this->context->structFieldMap[$htbucket->typeOf()->getElementType()->getName()]['value']
+                $struct,
+                $this->context->structFieldMap[$struct->typeOf()->getElementType()->getName()]['value']
             )
         );
-        $builder->store($htbucket, $htbucketPointer);
 
         $sizeTType = $this->context->getTypeFromString('size_t');
 
-//        $elementsPointer = $builder->alloca($htbuckets->typeOf());
+        $elementsPointer = $builder->alloca($htbuckets->typeOf());
         $indexPointer = $builder->alloca($sizeTType);
         $builder->store($index, $indexPointer);
-        $builder->branch($loopBlock);
 
         $builder->positionAtEnd($loopBlock);
-
-        debug($context, "about to loop", $index);
-        $htbucketsPtr = $builder->structGep(
-            $hashtable,
-            $context->structFieldMap[$hashtable->typeOf()->getElementType()->getName()]['buckets'],
-        );
         $index = $builder->load($indexPointer);
-
-        debug($context, "about to load htbucketsPtr");
-        $htbucketsPtr = $builder->load($htbucketsPtr);
-
-        $element = $builder->inBoundsGep($htbucketsPtr, $index);
-
-        debug($context, "about to load element");
-        $element = $builder->load($element);
-
-//        $elementPointer = $builder->load($elementPointer);
-        debug($context, "about to compare");
+        $elementPointer = $builder->inBoundsGep($elementsPointer, $sizeTType->constInt(0, false), $index);
+        $element = $builder->load($elementPointer);
         $comparisonResult = $builder->iCmp(\PHPLLVM\Builder::INT_EQ, $element, $element->typeOf()->constNull());
         $builder->branchIf($comparisonResult, $insertBlock, $iterateBlock);
 
         $builder->positionAtEnd($iterateBlock);
-        debug($context, "about to iterate");
         $index = $builder->load($indexPointer);
         $incrementedIndex = $builder->add($index, $sizeTType->constInt(1, false));
         $wrappedIndex = $builder->unsigendRem($incrementedIndex, $sizeTType->constInt(3, false)); // todo use actual hashtable size
@@ -216,19 +277,12 @@ class HashTable extends Type {
         $builder->branch($loopBlock);
 
         $builder->positionAtEnd($insertBlock);
-        debug($context, "about to insert");
-        $htbucketsPtr = $builder->structGep(
-            $hashtable,
-            $context->structFieldMap[$hashtable->typeOf()->getElementType()->getName()]['buckets'],
-        );
-        $htbuckets = $builder->load($htbucketsPtr);
-        $targetHtbucketPtr = $builder->inBoundsGep($htbuckets, $builder->load($indexPointer));
-        $builder->store($builder->load($htbucketPointer), $targetHtbucketPtr);
-        $builder->branch($returnBlock);
-
-        $builder->positionAtEnd($returnBlock);
-        debug($context, "about to return");
-        $builder->returnVoid();
+        $index = $builder->load($indexPointer);
+        $builder->store($struct, $builder->inBoundsGep(
+            $htbuckets,
+            $context->getTypeFromString('size_t')->constInt(0, false),
+            $index,
+        ));
 
 
 
@@ -255,6 +309,7 @@ class HashTable extends Type {
 //                );
 
         $this->context->builder->clearInsertionPosition();
+        */
     }
 
     private function implementSearch()

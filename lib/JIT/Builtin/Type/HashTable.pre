@@ -45,6 +45,47 @@ class HashTable extends Type {
 
     private function implementInsert()
     {
+        compile {
+            function __hashtable__insert($hashtable, $index, $value) {
+                $htbuckets = &$hashtable->buckets;
+
+                // todo $index => $size
+                $struct = malloc __htbucket__ $index;
+                $keyPtr = &$struct->key;
+                store $index $keyPtr;
+                $valuePtr = &$struct->value;
+                store $value $valuePtr;
+
+                $currentItem = alloca __htbucket__;
+                $currentItemPtr = $htbuckets[$index];
+                store $currentItemPtr $currentItem;
+
+                $currentItemIndexPtr = alloca size_t;
+                store $currentItemIndexPtr $index;
+
+                while($currentItem == null) {
+                    $currentItemIndex = load $currentItemIndexPtr;
+                    //go to next cell
+                    $currentItemIndex++;
+
+                    //wrap around the table
+                    $currentItemIndex = $currentItemIndex % 20;
+
+                    $currentItemPtr = $htbuckets[$index];
+                    store $currentItemPtr $currentItem;
+
+                    store $currentItemIndexPtr $currentItemIndex;
+                }
+
+                $currentItemIndex = load $currentItemIndexPtr;
+                $currentItemPtr = $htbuckets[$currentItemIndex];
+                store $currentItemPtr $struct;
+
+                return;
+            }
+        }
+
+        /*
         $context = $this->context;
         $builder = $context->builder;
 
@@ -143,6 +184,7 @@ class HashTable extends Type {
 //                );
 
         $this->context->builder->clearInsertionPosition();
+        */
     }
 
     private function implementSearch()
